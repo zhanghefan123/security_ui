@@ -1,9 +1,11 @@
 import * as G6 from "@antv/g6";
 import {useEffect, useRef, useState} from "react";
-import {Button, Col, Divider, List, message, Modal, Row, Select, Typography} from "antd";
+import {Button, Col, Divider, message, Modal, Row, Select} from "antd";
+import {Node} from "../entities/node"
+import {Link} from "../entities/link"
+import {startTopology, stopTopology} from "../requests/topology";
 
 export function Topology(props) {
-
     // 节点类型
     const nodeTypes= [
         {"value":"satellite", "label":"satellite"},
@@ -16,6 +18,11 @@ export function Topology(props) {
     // 当前的图
     const [graph, setGraph] = useState();
     // 提示框的内容
+    const promptBoxTypes = {
+        startTopology: Symbol.for("startTopology"),
+        stopTopology: Symbol.for("stopTopology"),
+    }
+    const [promptBoxType, setPromptBoxType] = useState()
     const [promptBoxTitle, setPromptBoxTitle] = useState("Warning");
     const [promptBoxOpen, setPromptBoxOpen] = useState(false)
     const [promptBoxText, setPromptBoxText] = useState("cannot create multiple edges between two nodes")
@@ -34,7 +41,8 @@ export function Topology(props) {
     // 第二个 split 的内容
     const secondSplitContent = "拓扑配置界面"
 
-    // 1. 创建图
+
+    // 2. 创建图
     useEffect(() => {
         // The source data
         const data = {
@@ -164,26 +172,80 @@ export function Topology(props) {
         setGraph(graph)
     }, []);
 
-    // 2. 提示框的处理函数
+    // 3. 提示框的处理函数
     function handlePromptOkCicked() {
-        setPromptBoxOpen(false)
+        if(promptBoxType === promptBoxTypes.startTopology) {
+            setPromptBoxLoading(true)
+            // 进行所有的节点的信息的收集
+            let nodesMap = {}
+            let nodesList = []
+            const graphNodes = graph.getNodes()
+            graphNodes.forEach((graphNode)=>{
+                console.log(graphNode)
+                let nodeID = graphNode.getID()
+                let result = nodeID.split("_")
+                let x = graphNode._cfg.bboxCache.x
+                let y = graphNode._cfg.bboxCache.y
+                let node = new Node(Number(result[1]), result[0], x, y)
+                nodesMap[nodeID] = node
+                nodesList.push(node)
+            })
+            // 进行所有的边的信息的收集
+            let links = []
+            const graphEdges = graph.getEdges()
+            console.log(graphEdges)
+            graphEdges.forEach((graphEdge)=>{
+                let graphSourceNodeID = graphEdge.getSource().getID()
+                let graphTargetNodeID = graphEdge.getTarget().getID()
+                let sourceNode = nodesMap[graphSourceNodeID]
+                let targetNode = nodesMap[graphTargetNodeID]
+                links.push(new Link(sourceNode, targetNode))
+            })
+            // 构建参数
+            const params= {
+                nodes: nodesList,
+                links: links,
+            }
+            // 调用函数
+            startTopology(params, (response)=>{
+                message.success({
+                    content: `successfully start the topology`
+                })
+                setPromptBoxLoading(false)
+                setPromptBoxOpen(false)
+            }, (error)=>{
+                message.error({
+                    content: `start topology error ${error}`
+                })
+                setPromptBoxLoading(false)
+                setPromptBoxOpen(false)
+            })
+
+        } else if (promptBoxType === promptBoxTypes.stopTopology) {
+            setPromptBoxLoading(true)
+
+            setPromptBoxLoading(false)
+            setPromptBoxOpen(false)
+        } else {
+            console.log("unsupported promptBoxType")
+        }
     }
 
     function handlePromptCancelCicked() {
         setPromptBoxOpen(false)
     }
 
-    // 3. 复选框的处理函数
+    // 4. 复选框的处理函数
     function handleNodeTypeSelect(value){
         setNodeType(value)
     }
 
 
-    // 4. 拓扑操作
-    // 4.1 进行节点的添加
+    // 5. 拓扑操作
+    // 5.1 进行节点的添加
     function AddNode(){
         if (nodeType === "satellite") {  // 进行卫星节点的添加
-            let satelliteId = nodeType + "" + (satelliteCount + 1)
+            let satelliteId = nodeType + "_" + (satelliteCount + 1)
             let satellite = {
                 id: satelliteId,
                 label: satelliteId,
@@ -195,7 +257,7 @@ export function Topology(props) {
             graph.addItem('node', satellite);
             setSatelliteCount(satelliteCount + 1);
         } else if (nodeType === "consensus") { // 进行共识节点的添加
-            let consensusNodeId = nodeType + "" + (consensusNodeCount + 1)
+            let consensusNodeId = nodeType + "_" + (consensusNodeCount + 1)
             let consensusNode = {
                 id: consensusNodeId,
                 label: consensusNodeId,
@@ -207,7 +269,7 @@ export function Topology(props) {
             graph.addItem('node', consensusNode);
             setConsensusNodeCount(consensusNodeCount + 1);
         } else if (nodeType === "router") { // 进行普通节点的添加
-            let routerId = nodeType + "" + (routerCount + 1)
+            let routerId = nodeType + "_" + (routerCount + 1)
             let router = {
                 id: routerId,
                 label: routerId,
@@ -219,7 +281,7 @@ export function Topology(props) {
             graph.addItem('node', router);
             setrouterCount(routerCount + 1);
         } else if (nodeType === "malicious") { // 进行恶意节点的添加
-            let maliciousNodeId = nodeType + "" + maliciousNodeCount + 1
+            let maliciousNodeId = nodeType + "_" + (maliciousNodeCount + 1)
             let maliciousNode = {
                 id: maliciousNodeId,
                 label: maliciousNodeId,
@@ -236,15 +298,26 @@ export function Topology(props) {
         }
     }
 
-    // 4.2 进行拓扑的启动
+    // 5.2 进行拓扑的启动
     function StartTopology(){
+        setPromptBoxType(promptBoxTypes.startTopology)
+        setPromptBoxOpen(true)
+        setPromptBoxTitle("start topology")
+    }
 
+    // 5.3 进行拓扑的删除
+    function StopTopology(){
+        setPromptBoxType(promptBoxTypes.stopTopology)
+        setPromptBoxOpen(true)
+        setPromptBoxTitle("stop topology")
     }
 
     return (
         <div>
             {/*第1行*/}
-            <Row style={{height: "30px"}}></Row>
+            <Row style={{height: "30px"}}>
+
+            </Row>
             {/*第2行*/}
             <Row>
                 <Divider
@@ -257,7 +330,7 @@ export function Topology(props) {
             </Row>
             {/*第3行*/}
             <Row>
-                <Col span={9}></Col>
+                <Col span={8}></Col>
                 <Col span={2} style={{textAlign: "center"}}>
                     <Select
                         defaultValue="satellite"
@@ -282,7 +355,15 @@ export function Topology(props) {
                         start topology
                     </Button>
                 </Col>
-                <Col span={9}></Col>
+                <Col span={2} style={{textAlign: "center"}}>
+                    <Button
+                        type={"primary"}
+                        danger
+                        onClick={StopTopology}>
+                        stop topology
+                    </Button>
+                </Col>
+                <Col span={8}></Col>
             </Row>
             {/*第4行*/}
             <Row>
