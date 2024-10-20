@@ -43,8 +43,7 @@ export function Constellation(props) {
 
     // 提示框处理函数1
     function handlePromptOkCicked(){
-        // 处理 startConstellation
-        if (promptBoxType === promptBoxTypes.startConstellation) {
+        if (promptBoxType === promptBoxTypes.startConstellation) { // 处理 startConstellation
             setPromptBoxLoading(true)
             const params = {
                 orbit_number: orbitNumber,
@@ -63,7 +62,7 @@ export function Constellation(props) {
                 setPromptBoxLoading(false)
                 setPromptBoxOpen(false)
             })
-        } else if(promptBoxType === promptBoxTypes.stopConstellation) {
+        } else if(promptBoxType === promptBoxTypes.stopConstellation) { // 处理 stopConstellation
             setPromptBoxLoading(true)
             stopConstellationRequest((response)=>{
                 message.success({

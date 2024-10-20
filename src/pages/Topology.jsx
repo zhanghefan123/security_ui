@@ -5,13 +5,22 @@ import {Node} from "../entities/node"
 import {Link} from "../entities/link"
 import {startTopology, stopTopology} from "../requests/topology";
 
+// NetworkNodeType_NormalSatellite    NetworkNodeType = 0
+// NetworkNodeType_ConsensusSatellite NetworkNodeType = 1
+// NetworkNodeType_EtcdService        NetworkNodeType = 2
+// NetworkNodeType_PositionService    NetworkNodeType = 3
+// NetworkNodeType_Router             NetworkNodeType = 4
+// NetworkNodeType_NormalNode         NetworkNodeType = 5
+// NetworkNodeType_ConsensusNode      NetworkNodeType = 6
+// NetworkNodeType_MaliciousNode      NetworkNodeType = 7
+
 export function Topology(props) {
     // 节点类型
     const nodeTypes= [
-        {"value":"satellite", "label":"satellite"},
-        {"value":"consensus", "label":"consensus"},
-        {"value":"router", "label": "router"},
-        {"value":"malicious", "label": "malicious"},
+        {"value":"Router", "label": "Router"},
+        {"value":"NormalNode", "label": "NormalNode"},
+        {"value":"ConsensusNode", "label": "ConsensusNode"},
+        {"value":"MaliciousNode", "label": "MaliciousNode"},
     ]
     // 选中的节点类型
     const [nodeType, setNodeType] = useState("satellite")  // 当前选中的节点的类型 -> 状态
@@ -30,10 +39,11 @@ export function Topology(props) {
     const [promptBoxCancelText, setPromptBoxCancelText] = useState("cancel")
     const [promptBoxLoading, setPromptBoxLoading] = useState(false)
     // 各种节点的数量
-    const [satelliteCount, setSatelliteCount] = useState(0)
-    const [consensusNodeCount, setConsensusNodeCount] = useState(0)
     const [routerCount, setrouterCount] = useState(0)
+    const [normalNodeCount, setNormalNodeCount] = useState(0)
+    const [consensusNodeCount, setConsensusNodeCount] = useState(0)
     const [maliciousNodeCount, setMaliciousNodeCount] = useState(0)
+
     // 引用 dom 节点
     const graphDivRef = useRef(null); // 创建一个
     // 第一个 split 的内容
@@ -181,7 +191,6 @@ export function Topology(props) {
             let nodesList = []
             const graphNodes = graph.getNodes()
             graphNodes.forEach((graphNode)=>{
-                console.log(graphNode)
                 let nodeID = graphNode.getID()
                 let result = nodeID.split("_")
                 let x = graphNode._cfg.bboxCache.x
@@ -193,7 +202,6 @@ export function Topology(props) {
             // 进行所有的边的信息的收集
             let links = []
             const graphEdges = graph.getEdges()
-            console.log(graphEdges)
             graphEdges.forEach((graphEdge)=>{
                 let graphSourceNodeID = graphEdge.getSource().getID()
                 let graphTargetNodeID = graphEdge.getTarget().getID()
@@ -244,31 +252,7 @@ export function Topology(props) {
     // 5. 拓扑操作
     // 5.1 进行节点的添加
     function AddNode(){
-        if (nodeType === "satellite") {  // 进行卫星节点的添加
-            let satelliteId = nodeType + "_" + (satelliteCount + 1)
-            let satellite = {
-                id: satelliteId,
-                label: satelliteId,
-                x: graphDivRef.current.clientWidth / 2,
-                y: graphDivRef.current.clientHeight / 2,
-                size: 40,
-                img: './pictures/satellite.png',
-            };
-            graph.addItem('node', satellite);
-            setSatelliteCount(satelliteCount + 1);
-        } else if (nodeType === "consensus") { // 进行共识节点的添加
-            let consensusNodeId = nodeType + "_" + (consensusNodeCount + 1)
-            let consensusNode = {
-                id: consensusNodeId,
-                label: consensusNodeId,
-                x: graphDivRef.current.clientWidth / 2,
-                y: graphDivRef.current.clientHeight / 2,
-                size: 40,
-                img: "./pictures/consensus.png",
-            };
-            graph.addItem('node', consensusNode);
-            setConsensusNodeCount(consensusNodeCount + 1);
-        } else if (nodeType === "router") { // 进行普通节点的添加
+        if (nodeType === "router") { // 进行路由节点的添加
             let routerId = nodeType + "_" + (routerCount + 1)
             let router = {
                 id: routerId,
@@ -280,6 +264,30 @@ export function Topology(props) {
             }
             graph.addItem('node', router);
             setrouterCount(routerCount + 1);
+        } else if (nodeType === "normalNode") { // 进行普通节点的添加
+            let normalNodeId = nodeType + "_" + (normalNodeCount + 1)
+            let normalNode = {
+                id: normalNodeId,
+                label: normalNodeId,
+                x: graphDivRef.current.clientWidth / 2,
+                y: graphDivRef.current.clientHeight / 2,
+                size: 40,
+                img: './pictures/normalNode.png',
+            }
+            graph.addItem('node', normalNode);
+            setNormalNodeCount(normalNodeCount + 1)
+        } else if (nodeType === "consensusNode") { // 进行共识节点的添加
+            let consensusNodeId = nodeType + "_" + (consensusNodeCount + 1)
+            let consensusNode = {
+                id: consensusNodeId,
+                label: consensusNodeId,
+                x: graphDivRef.current.clientWidth / 2,
+                y: graphDivRef.current.clientHeight / 2,
+                size: 40,
+                img: './pictures/consensusNode.png',
+            }
+            graph.addItem('node', consensusNode);
+            setConsensusNodeCount(consensusNodeCount + 1);
         } else if (nodeType === "malicious") { // 进行恶意节点的添加
             let maliciousNodeId = nodeType + "_" + (maliciousNodeCount + 1)
             let maliciousNode = {
@@ -288,7 +296,7 @@ export function Topology(props) {
                 x: graphDivRef.current.clientWidth / 2,
                 y: graphDivRef.current.clientHeight / 2,
                 size: 40,
-                img: "./pictures/hacker.png"
+                img: "./pictures/maliciousNode.png"
             }
             graph.addItem('node', maliciousNode);
             setMaliciousNodeCount(maliciousNodeCount + 1);
