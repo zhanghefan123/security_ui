@@ -22,6 +22,7 @@ export function Topology(props) {
         {"value":"Router", "label": "Router"},
         {"value":"NormalNode", "label": "NormalNode"},
         {"value":"ConsensusNode", "label": "ConsensusNode"},
+        {"value":"ChainMakerNode", "label": "ChainMakerNode"},
         {"value":"MaliciousNode", "label": "MaliciousNode"},
     ]
     // 选中的节点类型
@@ -46,6 +47,7 @@ export function Topology(props) {
     let routerCount = 0
     let normalNodeCount = 0
     let consensusNodeCount = 0
+    let chainMakerNodeCount = 0
     let maliciousNodeCount = 0
     // const [routerCount, setrouterCount] = useState(0)
     // const [normalNodeCount, setNormalNodeCount] = useState(0)
@@ -351,6 +353,18 @@ export function Topology(props) {
             }
             graph.addItem('node', consensusNode);
             consensusNodeCount = consensusNodeCount + 1
+        } else if (nodeType === "ChainMakerNode") { // 进行长安链节点的添加
+            let chainMakerNodeId = nodeType + "_" + (chainMakerNodeCount + 1)
+            let chainMakerNode = {
+                id: chainMakerNodeId,
+                label: chainMakerNodeId,
+                x: x,
+                y: y,
+                size: 40,
+                img: './pictures/chainMakerNode.png',
+            }
+            graph.addItem('node', chainMakerNode);
+            chainMakerNodeCount = chainMakerNodeCount + 1
         } else if (nodeType === "MaliciousNode") { // 进行恶意节点的添加
             let maliciousNodeId = nodeType + "_" + (maliciousNodeCount + 1)
             let maliciousNode = {
