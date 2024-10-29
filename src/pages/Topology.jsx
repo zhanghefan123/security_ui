@@ -9,14 +9,14 @@ import {startTopology, stopTopology, getTopologyState} from "../requests/topolog
 // NetworkNodeType_ConsensusSatellite NetworkNodeType = 1 (constellation 专用)
 // NetworkNodeType_EtcdService        NetworkNodeType = 2 (constellation 专用)
 // NetworkNodeType_PositionService    NetworkNodeType = 3 (constellation 专用)
-
-
 // NetworkNodeType_Router             NetworkNodeType = 4 (topology 专用)
 // NetworkNodeType_NormalNode         NetworkNodeType = 5 (topology 专用)
 // NetworkNodeType_ConsensusNode      NetworkNodeType = 6 (topology 专用)
 // NetworkNodeType_MaliciousNode      NetworkNodeType = 7 (topology 专用)
 
 export function Topology(props) {
+    // 1. 参数的定义
+    // ---------------------------------------------------------------------------------------------
     // 节点类型
     const nodeTypes= [
         {"value":"Router", "label": "Router"},
@@ -31,11 +31,12 @@ export function Topology(props) {
     const [graph, setGraph] = useState(undefined)
     // 当前组建的初始化步骤
     const [initStep, setInitStep] = useState(0)
-    // 提示框的内容
+    // 提示框的类型
     const promptBoxTypes = {
         startTopology: Symbol.for("startTopology"),
         stopTopology: Symbol.for("stopTopology"),
     }
+    // 提示框的各个属性
     const [promptBoxType, setPromptBoxType] = useState()
     const [promptBoxTitle, setPromptBoxTitle] = useState("Warning");
     const [promptBoxOpen, setPromptBoxOpen] = useState(false)
@@ -49,23 +50,20 @@ export function Topology(props) {
     let consensusNodeCount = 0
     let chainMakerNodeCount = 0
     let maliciousNodeCount = 0
-    // const [routerCount, setrouterCount] = useState(0)
-    // const [normalNodeCount, setNormalNodeCount] = useState(0)
-    // const [consensusNodeCount, setConsensusNodeCount] = useState(0)
-    // const [maliciousNodeCount, setMaliciousNodeCount] = useState(0)
     // 当前的拓扑的状态
     const [currentTopologyState, setCurrentTopologyState] = useState(false)
-
     // 引用 dom 节点
     const graphDivRef = useRef(null); // 创建一个
     // 第一个 split 的内容
     const firstSplitContent = "操作面板"
     // 第二个 split 的内容
     const secondSplitContent = "拓扑配置界面"
+    // ---------------------------------------------------------------------------------------------
 
     // 2. 创建图
+    // ---------------------------------------------------------------------------------------------
     useEffect(() => {
-        // The source data
+        // 原始数据
         const data = {
             // The array of nodes
             nodes: [],
@@ -73,6 +71,7 @@ export function Topology(props) {
             edges: [],
         };
 
+        // 节点菜单
         const nodeMenu = new G6.Menu({
             offsetX: 10,
             itemTypes: ['node'],
@@ -95,6 +94,7 @@ export function Topology(props) {
             },
         })
 
+        // 边的菜单
         const edgeMenu = new G6.Menu({
             offsetX: 10,
             itemTypes: ['edge'],
@@ -117,19 +117,19 @@ export function Topology(props) {
             },
         })
 
-        // Instantiate the Graph
+        // 进行图的实例化
         const graphTmp = new G6.Graph({
-            container: 'graph', // The container id or HTML node of the graph canvas.
-            // The width and the height of graph canvas
+            container: 'graph', // html 元素的 id
+            // 图的宽度以及高毒
             width: graphDivRef.current.clientWidth,
             height: graphDivRef.current.clientHeight,
-            // 默认的边
+            // 默认的节点
             defaultNode: {
                 type: 'image',
                 size: [260, 80],
                 clipCfg: {
                     show: false,
-                    // Clip type options: circle, ellipse, rect, path
+                    // 节点的形状 type options: circle, ellipse, rect, path
                     type: 'circle',
                     // circle
                     r: 30,
@@ -139,6 +139,7 @@ export function Topology(props) {
                     },
                 },
             },
+            // 默认的边
             defaultEdge: {
                 shape: 'line',
                 style: {
@@ -146,14 +147,16 @@ export function Topology(props) {
                     lineWidth: 2,
                 },
             },
+            // 可用的模式: 允许拖拽画布、放缩画布、拖拽节点
             modes: {
-                default: ['create-edge', 'drag-canvas', 'zoom-canvas', 'drag-node', 'brush-select'], // 允许拖拽画布、放缩画布、拖拽节点
+                default: ['create-edge', 'drag-canvas', 'zoom-canvas', 'drag-node', 'brush-select'],
             },
+            // 两个插件
             plugins: [nodeMenu, edgeMenu],
         });
-        // Load the data
+        // 数据的加载
         graphTmp.data(data);
-        // Render the graph
+        // 图的渲染
         graphTmp.render();
         // 添加边之后的处理
         graphTmp.on('aftercreateedge', (e) => {
@@ -191,7 +194,10 @@ export function Topology(props) {
         setGraph(graphTmp)
         setInitStep(1)
     }, []);
+    // ---------------------------------------------------------------------------------------------
 
+    // 3. 在初始化的时候获取拓扑的状态
+    // ---------------------------------------------------------------------------------------------
     useEffect(() => {
         if(initStep===1){
             getTopologyState((response)=>{
@@ -213,6 +219,7 @@ export function Topology(props) {
         }
     }, [initStep]);
 
+    // 根据后端返回的参数重新进行图的构建
     function rebuildGraph(topology_params) {
         console.log(topology_params)
         for (let i = 0; i < topology_params["nodes"].length; i++) {
@@ -226,8 +233,11 @@ export function Topology(props) {
             AddEdgeLogic(sourceNodeId, targetNodeId)
         }
     }
+    // ---------------------------------------------------------------------------------------------
 
-    // 3. 提示框的处理函数
+    // 4. 提示框的处理函数
+    // ---------------------------------------------------------------------------------------------
+    // 4.1 当提示框点击了 OK 的时候
     function handlePromptOkCicked() {
         if(promptBoxType === promptBoxTypes.startTopology) {
             setPromptBoxLoading(true)
@@ -298,24 +308,31 @@ export function Topology(props) {
         }
     }
 
+    // 当提示框点击了取消的时候
     function handlePromptCancelCicked() {
         setPromptBoxOpen(false)
     }
+    // ---------------------------------------------------------------------------------------------
 
-    // 4. 复选框的处理函数
+
+
+    // 5. 下拉列表的处理函数
+    // ---------------------------------------------------------------------------------------------
     function handleNodeTypeSelect(value){
         setNodeType(value)
     }
+    // ---------------------------------------------------------------------------------------------
 
 
-    // 5. 拓扑操作
-    // 5.1 进行节点的添加
+    // 6. 拓扑操作
+    // ---------------------------------------------------------------------------------------------
+    // 6.1 进行节点的添加
     function AddNodeButtonClicked(){
         let middleX = graphDivRef.current.clientWidth / 2
         let middleY = graphDivRef.current.clientHeight / 2
         AddNodeLogic(nodeType, middleX, middleY)
     }
-    // 节点添加的逻辑
+    // 6.2 节点添加的逻辑
     function AddNodeLogic(nodeType, x, y){
         if (nodeType === "Router") { // 进行路由节点的添加
             let routerId = nodeType + "_" + (routerCount + 1)
@@ -383,28 +400,32 @@ export function Topology(props) {
             console.log("unsupported node type")
         }
     }
-    // 边添加的逻辑
+    // 6.3 边添加的逻辑
     function AddEdgeLogic(sourceNodeId, targetNodeId) {
         graph.addItem("edge", {
             source: sourceNodeId,
             target: targetNodeId
         })
     }
+    // ---------------------------------------------------------------------------------------------
 
-    // 5.2 进行拓扑的启动
+    // 7. 按钮
+    // ---------------------------------------------------------------------------------------------
+    // 7.1 进行拓扑的启动
     function StartTopology(){
         setPromptBoxType(promptBoxTypes.startTopology)
         setPromptBoxOpen(true)
         setPromptBoxTitle("start topology")
     }
-
-    // 5.3 进行拓扑的删除
+    // 7.2 进行拓扑的删除
     function StopTopology(){
         setPromptBoxType(promptBoxTypes.stopTopology)
         setPromptBoxOpen(true)
         setPromptBoxTitle("stop topology")
     }
+    // ---------------------------------------------------------------------------------------------
 
+    // 8. 实际的 HTML 代码
     return (
         <div>
             {/*第1行*/}
