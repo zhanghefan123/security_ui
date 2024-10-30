@@ -203,7 +203,9 @@ export function Topology(props) {
             getTopologyState((response)=>{
                 if (response.data["state"] === "up") {
                     setCurrentTopologyState(true)
-                    rebuildGraph(response.data["topology_params"])
+                    setTimeout(()=>{
+                        rebuildGraph(response.data["topology_params"])
+                    }, 0)
                 } else if(response.data["state"] === "down") {
                     setCurrentTopologyState(false)
                 } else {
@@ -224,7 +226,7 @@ export function Topology(props) {
         console.log(topology_params)
         for (let i = 0; i < topology_params["nodes"].length; i++) {
             let node = topology_params["nodes"][i]
-            AddNodeLogic(node["type"], node["x"], node["y"])
+            AddNodeLogic(node["type"], node["x"], node["y"], true)
         }
         for (let i = 0; i < topology_params["links"].length; i++){
             let link = topology_params["links"][i]
@@ -248,8 +250,8 @@ export function Topology(props) {
             graphNodes.forEach((graphNode)=>{
                 let nodeID = graphNode.getID()
                 let result = nodeID.split("_")
-                let x = graphNode._cfg.bboxCache.x
-                let y = graphNode._cfg.bboxCache.y
+                let x = graphNode._cfg.model.x
+                let y = graphNode._cfg.model.y
                 let node = new Node(Number(result[1]), result[0], x, y)
                 nodesMap[nodeID] = node
                 nodesList.push(node)
@@ -275,15 +277,16 @@ export function Topology(props) {
                     content: `successfully start the topology`
                 })
                 setCurrentTopologyState(true) // 进行当前状态的更新 -> true
-                setPromptBoxLoading(false)
-                setPromptBoxOpen(false)
+                setPromptBoxLoading(false) // 关闭 promptbox 的 loading 状态
+                setPromptBoxOpen(false) // 不打开 promptbox
+                window.location.reload() // 进行页面的强制刷新
             }, (error)=>{
                 message.error({
                     content: `start topology error ${error}`
                 })
                 setCurrentTopologyState(false) // 进行当前状态的更新 -> false
-                setPromptBoxLoading(false)
-                setPromptBoxOpen(false)
+                setPromptBoxLoading(false) // 关闭 promptbox 的 loading 状态
+                setPromptBoxOpen(false) // 关闭 promptbox
             })
 
         } else if (promptBoxType === promptBoxTypes.stopTopology) {
@@ -293,8 +296,9 @@ export function Topology(props) {
                     content: `successfully stop the topology`
                 })
                 setCurrentTopologyState(false) // 进行当前状态的更新 -> false
-                setPromptBoxLoading(false)
-                setPromptBoxOpen(false)
+                setPromptBoxLoading(false) // 关闭 promptbox 的 loading 状态
+                setPromptBoxOpen(false)  // 关闭 promptbox
+                window.location.reload() // 进行页面的强制刷新
             }, (error)=>{
                 message.error({
                     content: `stop topology error ${error}`
@@ -330,10 +334,10 @@ export function Topology(props) {
     function AddNodeButtonClicked(){
         let middleX = graphDivRef.current.clientWidth / 2
         let middleY = graphDivRef.current.clientHeight / 2
-        AddNodeLogic(nodeType, middleX, middleY)
+        AddNodeLogic(nodeType, middleX, middleY, false)
     }
     // 6.2 节点添加的逻辑
-    function AddNodeLogic(nodeType, x, y){
+    function AddNodeLogic(nodeType, x, y, currentState){
         if (nodeType === "Router") { // 进行路由节点的添加
             let routerId = nodeType + "_" + (routerCount + 1)
             let router = {
@@ -343,6 +347,18 @@ export function Topology(props) {
                 y: y,
                 size: 40,
                 img: "./pictures/router.png",
+                labelCfg: {
+                    position: 'bottom',
+                    style: {
+                        fill: '#ffffff', // 设置字体颜色
+                        fontSize: 14,
+                        shadowOffsetY: 10,
+                        background: {
+                            fill: ReturnLableColor(currentState),
+                            padding: [4, 4, 4, 4]
+                        }
+                    }
+                }
             }
             graph.addItem('node', router);
             routerCount = routerCount + 1
@@ -355,6 +371,17 @@ export function Topology(props) {
                 y: y,
                 size: 40,
                 img: './pictures/normalNode.png',
+                labelCfg: {
+                    position: 'bottom',
+                    style: {
+                        fill: '#ffffff', // 设置字体颜色
+                        fontSize: 14,
+                        background: {
+                            fill: ReturnLableColor(currentState),
+                            padding: [4, 4, 4, 4]
+                        }
+                    }
+                }
             }
             graph.addItem('node', normalNode);
            normalNodeCount = normalNodeCount + 1
@@ -367,6 +394,17 @@ export function Topology(props) {
                 y: y,
                 size: 40,
                 img: './pictures/consensusNode.png',
+                labelCfg: {
+                    position: 'bottom',
+                    style: {
+                        fill: '#ffffff', // 设置字体颜色
+                        fontSize: 14,
+                        background: {
+                            fill: ReturnLableColor(currentState),
+                            padding: [4, 4, 4, 4]
+                        }
+                    }
+                }
             }
             graph.addItem('node', consensusNode);
             consensusNodeCount = consensusNodeCount + 1
@@ -379,6 +417,17 @@ export function Topology(props) {
                 y: y,
                 size: 40,
                 img: './pictures/chainMakerNode.png',
+                labelCfg: {
+                    position: 'bottom',
+                    style: {
+                        fill: '#ffffff', // 设置字体颜色
+                        fontSize: 14,
+                        background: {
+                            fill: ReturnLableColor(currentState),
+                            padding: [4, 4, 4, 4]
+                        }
+                    }
+                }
             }
             graph.addItem('node', chainMakerNode);
             chainMakerNodeCount = chainMakerNodeCount + 1
@@ -390,7 +439,18 @@ export function Topology(props) {
                 x: x,
                 y: y,
                 size: 40,
-                img: "./pictures/maliciousNode.png"
+                img: "./pictures/maliciousNode.png",
+                labelCfg: {
+                    position: 'bottom',
+                    style: {
+                        fill: '#ffffff', // 设置字体颜色
+                        fontSize: 14,
+                        background: {
+                            fill: ReturnLableColor(currentState),
+                            padding: [4, 4, 4, 4]
+                        }
+                    }
+                }
             }
             graph.addItem('node', maliciousNode);
             console.log("maliciousnodeCount: ", maliciousNodeCount)
@@ -425,7 +485,16 @@ export function Topology(props) {
     }
     // ---------------------------------------------------------------------------------------------
 
-    // 8. 实际的 HTML 代码
+    // 8. 定义颜色
+    function ReturnLableColor(currentState){
+        if (currentState) {
+            return '#4fde07'
+        } else {
+            return '#de0707'
+        }
+    }
+
+    // 9. 实际的 HTML 代码
     return (
         <div>
             {/*第1行*/}
