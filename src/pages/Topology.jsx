@@ -1,9 +1,10 @@
 import * as G6 from "@antv/g6";
-import {useEffect, useRef, useState} from "react";
-import {Button, Col, Divider, message, Modal, Row, Select} from "antd";
+import React, {useEffect, useRef, useState} from "react";
+import {Button, Col, Divider, Form, message, Modal, Radio, Row, Select} from "antd";
 import {Node} from "../entities/node"
 import {Link} from "../entities/link"
 import {getTopologyState, startTopology, stopTopology} from "../requests/topology";
+import {InputNumber} from "antd/lib";
 
 // NetworkNodeType_NormalSatellite    NetworkNodeType = 0 (constellation 专用)
 // NetworkNodeType_ConsensusSatellite NetworkNodeType = 1 (constellation 专用)
@@ -17,7 +18,7 @@ import {getTopologyState, startTopology, stopTopology} from "../requests/topolog
 export function Topology(props) {
     // 1. 参数的定义
     // ---------------------------------------------------------------------------------------------
-    // 节点类型
+    // 1.1 节点类型
     const nodeTypes= [
         {"value":"Router", "label": "Router"},
         {"value":"NormalNode", "label": "NormalNode"},
@@ -25,19 +26,63 @@ export function Topology(props) {
         {"value":"ChainMakerNode", "label": "ChainMakerNode"},
         {"value":"MaliciousNode", "label": "MaliciousNode"},
     ]
-    // 选中的节点类型
+    // 1.2 所有的表单字段
+    const blockchainTypeField = "blockchain type"
+    const consensusTypeField = "consensus type"
+    const networkEnvironmentField = "network environment"
+    const accessLinkBandwidthField = "access link bandwidth"
+    const consensusNodeCpuField = "consensus node cpu"
+    const attackThreadCountField = "attack thread count"
+    // 1.3 区块链的类型
+    const blockchainTypes = ["长安链", "以太坊", "fabric", "BIDL", "百度超级链"]
+    const consensusTypes = {
+        "长安链": ["TBFT", "RAFT", "MAXBFT"],
+        "以太坊": ["PoW", "PoS"],
+        "fabric": ["Mir-BFT", "BFT-SMaRt", "Raft"],
+        "BIDL": ["PBFT-并行", "PBFT-串行"],
+        "百度超级链": ["TDPoS", "PoA"]
+    }
+    // 1.4 各种节点的数量
+    let routerCount = 0
+    let normalNodeCount = 0
+    let consensusNodeCount = 0
+    let chainMakerNodeCount = 0
+    let maliciousNodeCount = 0
+    // 1.5 split 分割线的内容
+    const firstSplitContent = "拓扑配置界面"
+    const secondSplitContent = "区块链系统配置"
+    const topologySplitContent = "拓扑"
+    const attackSplitContent = "攻击配置"
+    // 1.6 当前选中的区块链的类型以及共识类型
+    const [selectedBlockchain, setSelectedBlockchain] = useState(blockchainTypes[0])
+    const [availableConsensusTypes, setAvailableConsensusTypes] = useState(consensusTypes[blockchainTypes[0]])
+    const [selectedConsensusType, setSelectedConsensusType] = useState(consensusTypes[blockchainTypes[0]][0])
+    const [selectedNetworkEnvironment, setSelectedNetworkEnvironment] = useState("广域网环境")
+    const [selectedAccessLinkBandwidth, setSelectedAccessLinkBandwidth] = useState(1)
+    const [selectedConsensusNodeCpuLimit, setSelectedConsensusNodeCpuLimit] = useState(0.5)
+    const [currentTopologyState, setCurrentTopologyState] = useState(false)
+    // 1.7 引用 dom 节点
+    const graphDivRef = useRef(null); // 创建一个
+    // ---------------------------------------------------------------------------------------------
+
+    // 2. 组件初始化
+    // ---------------------------------------------------------------------------------------------
+    // 2.1 组件属性
     const [nodeType, setNodeType] = useState("Router")  // 当前选中的节点的类型 -> 状态
-    // 当前的图
     const [graph, setGraph] = useState(undefined)
-    // 当前组建的初始化步骤
+    // 2.2 组件的初始化步骤
     const [createGraph, setCreateGraph] = useState(0)
     const [getState, setGetState] = useState(0)
-    // 提示框的类型
+    // ---------------------------------------------------------------------------------------------
+
+    // 3. 提示框相关
+    // ---------------------------------------------------------------------------------------------
+    // 3.1 提示框的类型
     const promptBoxTypes = {
         startTopology: Symbol.for("startTopology"),
         stopTopology: Symbol.for("stopTopology"),
     }
-    // 提示框的各个属性
+    // 3.2 提示框的各个属性
     const [promptBoxType, setPromptBoxType] = useState()
     const [promptBoxTitle, setPromptBoxTitle] = useState("Warning");
     const [promptBoxOpen, setPromptBoxOpen] = useState(false)
@@ -45,21 +90,8 @@ export function Topology(props) {
     const [promptBoxOkText, setPromptBoxOkText] = useState("ok")
     const [promptBoxCancelText, setPromptBoxCancelText] = useState("cancel")
     const [promptBoxLoading, setPromptBoxLoading] = useState(false)
-    // 各种节点的数量
-    let routerCount = 0
-    let normalNodeCount = 0
-    let consensusNodeCount = 0
-    let chainMakerNodeCount = 0
-    let maliciousNodeCount = 0
-    // 当前的拓扑的状态
-    const [currentTopologyState, setCurrentTopologyState] = useState(false)
-    // 引用 dom 节点
-    const graphDivRef = useRef(null); // 创建一个
-    // 第一个 split 的内容
-    const firstSplitContent = "操作面板"
-    // 第二个 split 的内容
-    const secondSplitContent = "拓扑配置界面"
     // ---------------------------------------------------------------------------------------------
+
 
     // 2. 创建图
     // ---------------------------------------------------------------------------------------------
@@ -267,7 +299,7 @@ export function Topology(props) {
                 }
             };
         }
-    }, [getState]);
+    }, [getState, currentTopologyState, graph]);
     // ---------------------------------------------------------------------------------------------
 
 
@@ -533,74 +565,165 @@ export function Topology(props) {
     // 10. 实际的 HTML 代码
     return (
         <div>
-            {/*第1行*/}
-            <Row style={{height: "30px"}}>
+            {/*空行*/}
+            <Row style={{height: "30px", marginLeft: "5vw", marginRight: "5vw"}}>
 
             </Row>
-            {/*第2行*/}
             <Row>
-                <Divider
-                    style={{
-                        borderColor: '#7cb305',
-                    }}
-                >
-                    {firstSplitContent}
-                </Divider>
+                <Col span={12}>
+                    {/*第2行*/}
+                    <Row style={{marginLeft: "5vw", marginRight:"5vw"}}>
+                        <Divider
+                            style={{
+                                borderColor: '#7cb305',
+                            }}
+                        >
+                            {firstSplitContent}
+                        </Divider>
+                    </Row>
+                    {/*第3行*/}
+                    <Row style={{marginLeft: "5vw", marginRight:"5vw"}}>
+                        <Col span={6} style={{textAlign: "center"}}>
+                            <Select
+                                defaultValue="Router"
+                                style={{width: "80%"}}
+                                onChange={handleNodeTypeSelect}
+                                options={nodeTypes}
+                            />
+                        </Col>
+                        <Col span={6} style={{textAlign: "center"}}>
+                            <Button
+                                type={"primary"}
+                                style={{width: "80%"}}
+                                disabled={currentTopologyState}
+                                onClick={AddNodeButtonClicked}>
+                                add node
+                            </Button>
+                        </Col>
+                        <Col span={6}  style={{textAlign: "center"}}>
+                            <Button
+                                type={"primary"}
+                                style={{width: "80%", backgroundColor:'#28c016'}}
+                                disabled={currentTopologyState}
+                                onClick={StartTopology}>
+                                start topology
+                            </Button>
+                        </Col>
+                        <Col span={6} style={{textAlign: "center"}}>
+                            <Button
+                                type={"primary"}
+                                danger
+                                disabled={!currentTopologyState}
+                                onClick={StopTopology}>
+                                stop topology
+                            </Button>
+                        </Col>
+                    </Row>
+                    {/*第4行*/}
+                    <Row style={{marginLeft: "5vw", marginRight:"5vw"}}>
+                        <Divider
+                            style={{
+                                borderColor: '#7cb305',
+                            }}
+                        >
+                            {secondSplitContent}
+                        </Divider>
+                    </Row>
+                    {/*注意 Form 是可以当成一行的*/}
+                    <Form
+                        labelCol={{
+                            span: 8,
+                        }}
+                        wrapperCol={{
+                            span: 14,
+                        }}
+                        style={{marginLeft: "5vw", marginRight:"5vw"}}
+                        // layout={"inline"}
+                    >
+                        <Form.Item
+                            label={blockchainTypeField}
+                        >
+                            <Select
+                                defaultValue={blockchainTypes[0]}
+                                value={selectedBlockchain}
+                                onChange={(value)=>{
+                                    setSelectedBlockchain(value)
+                                    setAvailableConsensusTypes(consensusTypes[value])
+                                    setSelectedConsensusType(consensusTypes[value][0])
+                                }}
+                                options={blockchainTypes.map((blockchainType) => ({
+                                    label: blockchainType,
+                                    value: blockchainType,
+                                }))}
+                                style={{width: "100%"}}
+                            />
+                        </Form.Item>
+                        <Form.Item
+                            label={consensusTypeField}
+                        >
+                            <Select
+                                value={selectedConsensusType}
+                                onChange={(value)=>{
+                                    setSelectedConsensusType(value)
+                                }}
+                                options={availableConsensusTypes.map((city) => ({
+                                    label: city,
+                                    value: city,
+                                }))}
+                            />
+                        </Form.Item>
+                        <Form.Item
+                            label={networkEnvironmentField}
+                        >
+                            <Radio.Group onChange={(e)=>{
+                                setSelectedNetworkEnvironment(e.target.value)
+                            }} value={selectedNetworkEnvironment}>
+                                <Radio value={"广域网环境"}>广域网环境</Radio>
+                                <Radio value={"数据中心环境"}>数据中心环境</Radio>
+                                <Radio value={"自组网环境"}>自组网环境</Radio>
+                            </Radio.Group>
+                        </Form.Item>
+                        <Form.Item
+                            label={accessLinkBandwidthField}
+                        >
+                            <InputNumber placeholder={`${selectedAccessLinkBandwidth}`} style={{width: "100%"}} changeOnWheel></InputNumber>
+                        </Form.Item>
+                        <Form.Item
+                            label={consensusNodeCpuField}
+                        >
+                            <InputNumber placeholder={`${selectedConsensusNodeCpuLimit}`} style={{width: "100%"}} changeOnWheel></InputNumber>
+                        </Form.Item>
+                    </Form>
+                    <Row style={{marginLeft: "5vw", marginRight:"5vw"}}>
+                        <Divider
+                            style={{
+                                borderColor: '#7cb305',
+                            }}
+                        >
+                            {attackSplitContent}
+                        </Divider>
+                    </Row>
+                </Col>
+                <Col span={12}>
+                    <Row style={{marginLeft: "5vw", marginRight:"5vw"}}>
+                        <Divider
+                            style={{
+                                borderColor: '#7cb305',
+                            }}
+                        >
+                            {topologySplitContent}
+                        </Divider>
+                    </Row>
+                    {/*第5行*/}
+                    <Row style={{marginLeft: "5vw", marginRight:"5vw"}}>
+                        <div ref={graphDivRef} id="graph" style={{backgroundColor: "grey", width: "100%", height: "35vw"}}>
+                        </div>
+                    </Row>
+                </Col>
             </Row>
-            {/*第3行*/}
-            <Row>
-                <Col span={8}></Col>
-                <Col span={2} style={{textAlign: "center"}}>
-                    <Select
-                        defaultValue="Router"
-                        style={{width: "80%"}}
-                        onChange={handleNodeTypeSelect}
-                        options={nodeTypes}
-                    />
-                </Col>
-                <Col span={2} style={{textAlign: "center"}}>
-                    <Button
-                        type={"primary"}
-                        style={{width: "80%"}}
-                        disabled={currentTopologyState}
-                        onClick={AddNodeButtonClicked}>
-                        add node
-                    </Button>
-                </Col>
-                <Col span={2}  style={{textAlign: "center"}}>
-                    <Button
-                        type={"primary"}
-                        style={{width: "80%", backgroundColor:'#28c016'}}
-                        disabled={currentTopologyState}
-                        onClick={StartTopology}>
-                        start topology
-                    </Button>
-                </Col>
-                <Col span={2} style={{textAlign: "center"}}>
-                    <Button
-                        type={"primary"}
-                        danger
-                        disabled={!currentTopologyState}
-                        onClick={StopTopology}>
-                        stop topology
-                    </Button>
-                </Col>
-                <Col span={8}></Col>
-            </Row>
-            {/*第4行*/}
-            <Row>
-                <Divider
-                    style={{
-                        borderColor: '#7cb305',
-                    }}
-                >
-                    {secondSplitContent}
-                </Divider>
-            </Row>
-            {/*第5行*/}
-            <Row>
-                <div ref={graphDivRef} id="graph" style={{backgroundColor: "grey", width:"100%", height: "450px"}}>
-                </div>
+            {/*空行*/}
+            <Row style={{height: "30px", marginLeft: "5vw", marginRight: "5vw"}}>
+
             </Row>
             {/*提示框*/}
             <Modal

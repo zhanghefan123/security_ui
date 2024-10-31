@@ -269,7 +269,7 @@ export function Constellation(props) {
             </Row>
             {/*第3行*/}
             <Form
-                name={{nameOfForm}}
+                name={nameOfForm}
                 onFinishFailed={onValidateStartConstellationFailed}
                 onFinish={onStartConstellationFinish}
                 onValuesChange={onStartConstellationValuesChange}
