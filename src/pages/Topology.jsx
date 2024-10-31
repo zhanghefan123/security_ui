@@ -3,7 +3,7 @@ import {useEffect, useRef, useState} from "react";
 import {Button, Col, Divider, message, Modal, Row, Select} from "antd";
 import {Node} from "../entities/node"
 import {Link} from "../entities/link"
-import {startTopology, stopTopology, getTopologyState} from "../requests/topology";
+import {getTopologyState, startTopology, stopTopology} from "../requests/topology";
 
 // NetworkNodeType_NormalSatellite    NetworkNodeType = 0 (constellation 专用)
 // NetworkNodeType_ConsensusSatellite NetworkNodeType = 1 (constellation 专用)
@@ -30,7 +30,8 @@ export function Topology(props) {
     // 当前的图
     const [graph, setGraph] = useState(undefined)
     // 当前组建的初始化步骤
-    const [initStep, setInitStep] = useState(0)
+    const [createGraph, setCreateGraph] = useState(0)
+    const [getState, setGetState] = useState(0)
     // 提示框的类型
     const promptBoxTypes = {
         startTopology: Symbol.for("startTopology"),
@@ -71,52 +72,6 @@ export function Topology(props) {
             edges: [],
         };
 
-        // 节点菜单
-        const nodeMenu = new G6.Menu({
-            offsetX: 10,
-            itemTypes: ['node'],
-            getContent(e, graph) {
-                const outDiv = document.createElement('div');
-                outDiv.style.width = '180px';
-                outDiv.innerHTML = `<ul>
-                    <li>删除节点</li>
-                    <li>取消</li>
-                  </ul>`
-                return outDiv
-            },
-            handleMenuClick(target, item, graph) {
-                if (target.textContent === "删除节点"){
-                    setTimeout(()=>{
-                        graph.removeItem(item)
-                    }, 0)
-                    message.success("成功删除节点" + item.getID())
-                }
-            },
-        })
-
-        // 边的菜单
-        const edgeMenu = new G6.Menu({
-            offsetX: 10,
-            itemTypes: ['edge'],
-            getContent(e, graph) {
-                const outDiv = document.createElement('div');
-                outDiv.style.width = '180px';
-                outDiv.innerHTML = `<ul>
-                    <li>删除边</li>
-                    <li>取消</li>
-                  </ul>`
-                return outDiv
-            },
-            handleMenuClick(target, item, graph) {
-                if(target.textContent === "删除边") {
-                    setTimeout(()=>{
-                        graph.removeItem(item)
-                    },0)
-                }
-                message.success("成功删除边")
-            },
-        })
-
         // 进行图的实例化
         const graphTmp = new G6.Graph({
             container: 'graph', // html 元素的 id
@@ -151,8 +106,6 @@ export function Topology(props) {
             modes: {
                 default: ['create-edge', 'drag-canvas', 'zoom-canvas', 'drag-node', 'brush-select'],
             },
-            // 两个插件
-            plugins: [nodeMenu, edgeMenu],
         });
         // 数据的加载
         graphTmp.data(data);
@@ -191,21 +144,20 @@ export function Topology(props) {
                 },0)
             }
         });
+
         setGraph(graphTmp)
-        setInitStep(1)
+        setCreateGraph(1)
     }, []);
     // ---------------------------------------------------------------------------------------------
 
     // 3. 在初始化的时候获取拓扑的状态
     // ---------------------------------------------------------------------------------------------
     useEffect(() => {
-        if(initStep===1){
+        if(createGraph===1){
             getTopologyState((response)=>{
                 if (response.data["state"] === "up") {
                     setCurrentTopologyState(true)
-                    setTimeout(()=>{
-                        rebuildGraph(response.data["topology_params"])
-                    }, 0)
+                    rebuildGraph(response.data["topology_params"])
                 } else if(response.data["state"] === "down") {
                     setCurrentTopologyState(false)
                 } else {
@@ -213,17 +165,17 @@ export function Topology(props) {
                         content: "unsupported topology state"
                     })
                 }
+                setGetState(1)
             }, (error)=>{
                 message.error({
                     content: "could not get the status from the backend server"
                 })
             })
         }
-    }, [initStep]);
+    }, [createGraph]);
 
     // 根据后端返回的参数重新进行图的构建
     function rebuildGraph(topology_params) {
-        console.log(topology_params)
         for (let i = 0; i < topology_params["nodes"].length; i++) {
             let node = topology_params["nodes"][i]
             AddNodeLogic(node["type"], node["x"], node["y"], true)
@@ -237,9 +189,93 @@ export function Topology(props) {
     }
     // ---------------------------------------------------------------------------------------------
 
-    // 4. 提示框的处理函数
+    // 4. 进行菜单的添加
     // ---------------------------------------------------------------------------------------------
-    // 4.1 当提示框点击了 OK 的时候
+    useEffect(() => {
+        if (getState === 1){
+            let nodeMenu = undefined
+            let edgeMenu = undefined
+            if (graph) {
+                // 节点菜单
+                nodeMenu = new G6.Menu({
+                    offsetX: 10,
+                    itemTypes: ['node'],
+                    getContent(e, graph) {
+                        const outDiv = document.createElement('div');
+                        outDiv.style.width = '180px';
+                        outDiv.innerHTML = `<ul>
+                    <li>创建webshell</li>
+                    <li>删除节点</li>
+                    <li>取消</li>
+                  </ul>`
+                        return outDiv
+                    },
+
+                    handleMenuClick(target, item, graph) {
+                        if (target.textContent === "创建webshell") {
+                            console.log(currentTopologyState)
+                            if (currentTopologyState) {
+                                // 进行 webshell 的创建, 跳转到实际的创建 webshell 的界面
+                                const windowProxy = window.open("_black")
+                                windowProxy.location.href = `/instance/${item.getID()}`
+                            } else {
+                                // 还不能创建 webshell
+                                message.error({
+                                    content: "still cannot create webshell"
+                                })
+                            }
+                        } else if (target.textContent === "删除节点"){
+                            setTimeout(()=>{
+                                graph.removeItem(item)
+                            }, 0)
+                            message.success("成功删除节点" + item.getID())
+                        }
+                    },
+                })
+
+                // 边的菜单
+                edgeMenu = new G6.Menu({
+                    offsetX: 10,
+                    itemTypes: ['edge'],
+                    getContent(e, graph) {
+                        const outDiv = document.createElement('div');
+                        outDiv.style.width = '180px';
+                        outDiv.innerHTML = `<ul>
+                    <li>删除边</li>
+                    <li>取消</li>
+                  </ul>`
+                        return outDiv
+                    },
+                    handleMenuClick(target, item, graph) {
+                        if(target.textContent === "删除边") {
+                            setTimeout(()=>{
+                                graph.removeItem(item)
+                            },0)
+                        }
+                        message.success("成功删除边")
+                    },
+                })
+                graph.addPlugin(nodeMenu);
+                graph.addPlugin(edgeMenu);
+            }
+
+            // 清理插件
+            return () => {
+                if (graph) {
+                    graph.removePlugin(nodeMenu);
+                    graph.removePlugin(edgeMenu)
+                }
+            };
+        }
+    }, [getState]);
+    // ---------------------------------------------------------------------------------------------
+
+
+
+
+    // 5. 提示框的处理函数
+    // ---------------------------------------------------------------------------------------------
+    // 5.1 当提示框点击了 OK 的时候
     function handlePromptOkCicked() {
         if(promptBoxType === promptBoxTypes.startTopology) {
             setPromptBoxLoading(true)
@@ -320,7 +356,7 @@ export function Topology(props) {
 
 
 
-    // 5. 下拉列表的处理函数
+    // 6. 下拉列表的处理函数
     // ---------------------------------------------------------------------------------------------
     function handleNodeTypeSelect(value){
         setNodeType(value)
@@ -328,15 +364,15 @@ export function Topology(props) {
     // ---------------------------------------------------------------------------------------------
 
 
-    // 6. 拓扑操作
+    // 7. 拓扑操作
     // ---------------------------------------------------------------------------------------------
-    // 6.1 进行节点的添加
+    // 7.1 进行节点的添加
     function AddNodeButtonClicked(){
         let middleX = graphDivRef.current.clientWidth / 2
         let middleY = graphDivRef.current.clientHeight / 2
         AddNodeLogic(nodeType, middleX, middleY, false)
     }
-    // 6.2 节点添加的逻辑
+    // 7.2 节点添加的逻辑
     function AddNodeLogic(nodeType, x, y, currentState){
         if (nodeType === "Router") { // 进行路由节点的添加
             let routerId = nodeType + "_" + (routerCount + 1)
@@ -460,7 +496,7 @@ export function Topology(props) {
             console.log("unsupported node type")
         }
     }
-    // 6.3 边添加的逻辑
+    // 7.3 边添加的逻辑
     function AddEdgeLogic(sourceNodeId, targetNodeId) {
         graph.addItem("edge", {
             source: sourceNodeId,
@@ -469,15 +505,15 @@ export function Topology(props) {
     }
     // ---------------------------------------------------------------------------------------------
 
-    // 7. 按钮
+    // 8. 按钮
     // ---------------------------------------------------------------------------------------------
-    // 7.1 进行拓扑的启动
+    // 8.1 进行拓扑的启动
     function StartTopology(){
         setPromptBoxType(promptBoxTypes.startTopology)
         setPromptBoxOpen(true)
         setPromptBoxTitle("start topology")
     }
-    // 7.2 进行拓扑的删除
+    // 8.2 进行拓扑的删除
     function StopTopology(){
         setPromptBoxType(promptBoxTypes.stopTopology)
         setPromptBoxOpen(true)
@@ -485,7 +521,7 @@ export function Topology(props) {
     }
     // ---------------------------------------------------------------------------------------------
 
-    // 8. 定义颜色
+    // 9. 定义颜色
     function ReturnLableColor(currentState){
         if (currentState) {
             return '#4fde07'
@@ -494,7 +530,7 @@ export function Topology(props) {
         }
     }
 
-    // 9. 实际的 HTML 代码
+    // 10. 实际的 HTML 代码
     return (
         <div>
             {/*第1行*/}

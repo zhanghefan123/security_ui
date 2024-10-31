@@ -13,12 +13,15 @@ import {Cartesian3} from "cesium";
 
 // Constellation 页面
 export function Constellation(props) {
-    // 参数
+    // 1. 参数的定义
+    // ---------------------------------------------------------------------------------------------
+    // 1.1 常量
     const nameOfForm = "constellation_configuration"
     const orbitNumberField = "orbit_number"
     const satellitePerOrbitField = "satellite_per_orbit"
     const firstSplitContent = "配置面板"
     const secondSplitContent = "可视化界面"
+    // 1.2 参数表格
     const tableColumns = [
         {
             title: "param",
@@ -31,6 +34,7 @@ export function Constellation(props) {
             key: "paramsValue"
         }
     ]
+    // 1.3 星座参数
     const [orbitNumber, setOrbitNumber] = useState()
     const [satellitePerOrbit, setSatellitePerOrbit] = useState()
 
