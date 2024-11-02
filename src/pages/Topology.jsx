@@ -1,10 +1,19 @@
 import * as G6 from "@antv/g6";
 import React, {useEffect, useRef, useState} from "react";
-import {Button, Col, Divider, Form, message, Modal, Radio, Row, Select, Table} from "antd";
+import {Button, Col, Divider, Form, message, Modal, Radio, Row, Select, Table, Upload} from "antd";
 import {Node} from "../entities/node"
 import {Link} from "../entities/link"
-import {getTopologyState, startTopology, stopTopology} from "../requests/topology";
+import {
+    getDataCenterTopology, getManetTopology,
+    getTopologyState,
+    getWideAreaNetworkTopology, startAttackRequest,
+    startTopology,
+    stopTopology
+} from "../requests/topology";
 import {InputNumber} from "antd/lib";
+import {ProForm} from "@ant-design/pro-components";
+import {UploadOutlined} from "@ant-design/icons";
+import {clear} from "@testing-library/user-event/dist/clear";
 
 // NetworkNodeType_NormalSatellite    NetworkNodeType = 0 (constellation 专用)
 // NetworkNodeType_ConsensusSatellite NetworkNodeType = 1 (constellation 专用)
@@ -44,6 +53,8 @@ export function Topology(props) {
         stroke: '#0b39ef',
         lineWidth: 5,
     }
+    // 表单
+    const [startTopologyForm] = ProForm.useForm()
     // 1.2 所有的拓扑配置相关表单字段
     const networkEnvironmentField = ["网络环境", "network_env"]
     const blockchainTypeField = ["区块链类型", "blockchain_type"]
@@ -52,6 +63,7 @@ export function Topology(props) {
     const consensusNodeCpuField = ["共识节点CPU", "consensus_node_cpu"]
     const consensusNodeMemoryField = ["共识节点内存", "consensus_node_memory"]
     const consensusThreadCountField = ["共识线程数量", "consensus_thread_count"]
+    const totalNodesCountField = ["总节点数量", "total_node_count"]
     // 1.3 所有攻击相关的表单字段
     const attackThreadCountField = ["攻击线程数量", "attack_thread_count"]
     const attackTypeField = ["攻击类型", "attack_type"]
@@ -95,17 +107,18 @@ export function Topology(props) {
     const [consensusNodes, setConsensusNodes] = useState([])
     const [chainMakerNodes, setChainMakerNodes] = useState([])
     const [maliciousNodes, setMaliciousNodes] = useState([])
+    const [totalNodesCount, setTotalNodesCount] = useState(0)
     // 1.9 引用 dom 节点
     const graphDivRef = useRef(null); // 创建一个
     // 1.10 参数表格
     const tableColumns = [
         {
-            title: "param",
+            title: "参数",
             dataIndex: "paramsDescription",
             key: "paramsDescription"
         },
         {
-            title: "value",
+            title: "值",
             dataIndex: "paramsValue",
             key: "paramsValue"
         }
@@ -203,9 +216,7 @@ export function Topology(props) {
                 let anotherDirection = (edge.getSource().getID() === targetId) && (edge.getTarget().getID() === sourceId)
                 return oneDirection || anotherDirection
             })
-            console.log(sameNodeEdges)
             if (sameNodeEdges.length === 2) {
-                console.log(sameNodeEdges)
                 // 删除的时候, 如果删自己的就会发生错误, 状态不一致, 这个时候需要使用 setTimeout
                 setTimeout(()=>{
                     graphTmp.removeItem(sameNodeEdges[0])
@@ -239,7 +250,7 @@ export function Topology(props) {
             getTopologyState((response)=>{
                 if (response.data["state"] === "up") {
                     setCurrentTopologyState(true)
-                    rebuildGraph(response.data["topology_params"])
+                    rebuildGraph(response.data["topology_params"], true)
                 } else if(response.data["state"] === "down") {
                     setCurrentTopologyState(false)
                 } else {
@@ -257,17 +268,32 @@ export function Topology(props) {
     }, [createGraph]);
 
     // 根据后端返回的参数重新进行图的构建
-    function rebuildGraph(topology_params) {
+    function rebuildGraph(topology_params, state) {
+        // 需要先进行所有的节点的删除
+        clearState()
         for (let i = 0; i < topology_params["nodes"].length; i++) {
             let node = topology_params["nodes"][i]
-            AddNodeLogic(node["type"], node["x"], node["y"], true)
+            AddNodeLogic(node["type"], node["x"], node["y"], state)
         }
-        for (let i = 0; i < topology_params["links"].length; i++){
-            let link = topology_params["links"][i]
-            let sourceNodeId = link["source_node"]["type"] + "_" + link["source_node"]["index"]
-            let targetNodeId = link["target_node"]["type"] + "_" + link["target_node"]["index"]
-            AddEdgeLogic(sourceNodeId, targetNodeId)
-        }
+        setTimeout(()=>{
+            for (let i = 0; i < topology_params["links"].length; i++){
+                let link = topology_params["links"][i]
+                let sourceNodeId = link["source_node"]["type"] + "_" + link["source_node"]["index"]
+                let targetNodeId = link["target_node"]["type"] + "_" + link["target_node"]["index"]
+                let link_type = link["link_type"]
+                AddEdgeLogic(sourceNodeId, targetNodeId, link_type)
+            }
+        }, 1)
+    }
+
+    function clearState(){
+        graph.clear()
+        setRouters([])
+        setNormalNodes([])
+        setConsensusNodes([])
+        setChainMakerNodes([])
+        setMaliciousNodes([])
+        setTotalNodesCount([])
     }
     // ---------------------------------------------------------------------------------------------
 
@@ -295,7 +321,6 @@ export function Topology(props) {
 
                     handleMenuClick(target, item, graph) {
                         if (target.textContent === "创建webshell") {
-                            console.log(currentTopologyState)
                             if (currentTopologyState) {
                                 // 进行 webshell 的创建, 跳转到实际的创建 webshell 的界面
                                 const windowProxy = window.open("_black")
@@ -380,11 +405,21 @@ export function Topology(props) {
             let links = []
             const graphEdges = graph.getEdges()
             graphEdges.forEach((graphEdge)=>{
+                // console.log(graphEdge._cfg.styles.selected.lineWidth) 这里进行的是边的粗细的输出
+                let lineWidth = graphEdge._cfg.styles.selected.lineWidth
+                let lineType = ""
+                if (lineWidth === 2) {
+                    lineType = "access"
+                } else if (lineWidth ===  5) {
+                    lineType = "backbone"
+                } else {
+                    console.log("unsupported line type")
+                }
                 let graphSourceNodeID = graphEdge.getSource().getID()
                 let graphTargetNodeID = graphEdge.getTarget().getID()
                 let sourceNode = nodesMap[graphSourceNodeID]
                 let targetNode = nodesMap[graphTargetNodeID]
-                links.push(new Link(sourceNode, targetNode))
+                links.push(new Link(sourceNode, targetNode, lineType))
             })
             // 构建参数
             const params= {
@@ -419,7 +454,7 @@ export function Topology(props) {
             setPromptBoxLoading(true)
             stopTopology((response)=>{
                 message.success({
-                    content: `successfully stop the topology`
+                    content: `成功停止拓扑`
                 })
                 setCurrentTopologyState(false) // 进行当前状态的更新 -> false
                 setPromptBoxLoading(false) // 关闭 promptbox 的 loading 状态
@@ -433,8 +468,29 @@ export function Topology(props) {
                 setPromptBoxLoading(false)
                 setPromptBoxOpen(false)
             })
-        } else if (promptBoxType === promptBoxTypes.startAttack){
-
+        } else if (promptBoxType === promptBoxTypes.startAttack){ // 如果是发动攻击的话
+            setPromptBoxLoading(true)
+            let params = {
+                attack_thread_count: selectedAttackThreadCount,
+                attack_type: selectedAttackType,
+                attack_node: selectedAttackNode,
+                attacked_node: selectedAttackedNode,
+                attack_duration: selectedAttackDuration
+            }
+            let splitContent = selectedAttackNode.split("_")
+            startAttackRequest(parseInt(splitContent[1]), params, (response)=>{
+                message.success({
+                    content: `成功发动攻击`
+                })
+                setPromptBoxLoading(false) // 关闭 promptbox 的 loading 状态
+                setPromptBoxOpen(false)  // 关闭 promptbox
+            },(error)=>{
+                message.error({
+                    content: "发动攻击失败"
+                })
+                setPromptBoxLoading(false) // 关闭 promptbox 的 loading 状态
+                setPromptBoxOpen(false)  // 关闭 promptbox
+            })
         } else if (promptBoxType === promptBoxTypes.errorParameters) {
             setPromptBoxOpen(false)
         }
@@ -466,161 +522,194 @@ export function Topology(props) {
             return '#de0707'
         }
     }
+
     // 9.3 节点添加的逻辑
     const AddNodeLogic = (nodeType, x, y, currentState) =>{
+        let successfullyAdd = false
         if (nodeType === "Router") { // 进行路由节点的添加
-            let routerId = nodeType + "_" + (routers.length + 1)
-            let router = {
-                id: routerId,
-                label: routerId,
-                x: x,
-                y: y,
-                size: 40,
-                img: "./pictures/router.png",
-                labelCfg: {
-                    position: 'bottom',
-                    style: {
-                        fill: '#ffffff', // 设置字体颜色
-                        fontSize: 14,
-                        shadowOffsetY: 10,
-                        background: {
-                            fill: ReturnLableColor(currentState),
-                            padding: [4, 4, 4, 4]
+            setRouters(prevRouters => {
+                let routerId = nodeType + "_" + (prevRouters.length + 1)
+                let router = {
+                    id: routerId,
+                    label: routerId,
+                    x: x,
+                    y: y,
+                    size: 40,
+                    img: "./pictures/router.png",
+                    labelCfg: {
+                        position: 'bottom',
+                        style: {
+                            fill: '#ffffff', // 设置字体颜色
+                            fontSize: 14,
+                            shadowOffsetY: 10,
+                            background: {
+                                fill: ReturnLableColor(currentState),
+                                padding: [4, 4, 4, 4]
+                            }
                         }
                     }
                 }
-            }
-            setRouters(prevNodes => [...prevNodes, routerId])
-            graph.addItem('node', router);
+                graph.addItem('node', router);
+                return [...prevRouters, routerId]
+            })
+            successfullyAdd = true
         } else if (nodeType === "NormalNode") { // 进行普通节点的添加
-            let normalNodeId = nodeType + "_" + (normalNodes.length + 1)
-            let normalNode = {
-                id: normalNodeId,
-                label: normalNodeId,
-                x: x,
-                y: y,
-                size: 40,
-                img: './pictures/normalNode.png',
-                labelCfg: {
-                    position: 'bottom',
-                    style: {
-                        fill: '#ffffff', // 设置字体颜色
-                        fontSize: 14,
-                        background: {
-                            fill: ReturnLableColor(currentState),
-                            padding: [4, 4, 4, 4]
+            setNormalNodes(prevNormalNodes => {
+                let normalNodeId = nodeType + "_" + (prevNormalNodes.length + 1)
+                let normalNode = {
+                    id: normalNodeId,
+                    label: normalNodeId,
+                    x: x,
+                    y: y,
+                    size: 40,
+                    img: './pictures/normalNode.png',
+                    labelCfg: {
+                        position: 'bottom',
+                        style: {
+                            fill: '#ffffff', // 设置字体颜色
+                            fontSize: 14,
+                            background: {
+                                fill: ReturnLableColor(currentState),
+                                padding: [4, 4, 4, 4]
+                            }
                         }
                     }
                 }
-            }
-            setNormalNodes(prevNodes => [...prevNodes, normalNodeId])
-            graph.addItem('node', normalNode);
+                graph.addItem('node', normalNode);
+                return [...prevNormalNodes, normalNodeId]
+            })
+            successfullyAdd = true
         } else if (nodeType === "ConsensusNode") { // 进行共识节点的添加
-            let consensusNodeId = nodeType + "_" + (consensusNodes.length + 1)
-            let consensusNode = {
-                id: consensusNodeId,
-                label: consensusNodeId,
-                x: x,
-                y: y,
-                size: 40,
-                img: './pictures/consensusNode.png',
-                labelCfg: {
-                    position: 'bottom',
-                    style: {
-                        fill: '#ffffff', // 设置字体颜色
-                        fontSize: 14,
-                        background: {
-                            fill: ReturnLableColor(currentState),
-                            padding: [4, 4, 4, 4]
+            setConsensusNodes(prevConsensusNodes => {
+                let consensusNodeId = nodeType + "_" + (prevConsensusNodes.length + 1)
+                let consensusNode = {
+                    id: consensusNodeId,
+                    label: consensusNodeId,
+                    x: x,
+                    y: y,
+                    size: 40,
+                    img: './pictures/consensusNode.png',
+                    labelCfg: {
+                        position: 'bottom',
+                        style: {
+                            fill: '#ffffff', // 设置字体颜色
+                            fontSize: 14,
+                            background: {
+                                fill: ReturnLableColor(currentState),
+                                padding: [4, 4, 4, 4]
+                            }
                         }
                     }
                 }
-            }
-            setConsensusNodes(prevNodes => [...prevNodes, consensusNodeId])
-            graph.addItem('node', consensusNode);
+                graph.addItem('node', consensusNode);
+                return [...prevConsensusNodes, consensusNodeId]
+            })
+            successfullyAdd = true
         } else if (nodeType === "ChainMakerNode") { // 进行长安链节点的添加
-            let chainMakerNodeId = nodeType + "_" + (chainMakerNodes.length + 1)
-            let chainMakerNode = {
-                id: chainMakerNodeId,
-                label: chainMakerNodeId,
-                x: x,
-                y: y,
-                size: 40,
-                img: './pictures/chainMakerNode.png',
-                labelCfg: {
-                    position: 'bottom',
-                    style: {
-                        fill: '#ffffff', // 设置字体颜色
-                        fontSize: 14,
-                        background: {
-                            fill: ReturnLableColor(currentState),
-                            padding: [4, 4, 4, 4]
+            setChainMakerNodes(prevChainMakerNodes => {
+                let chainMakerNodeId = nodeType + "_" + (prevChainMakerNodes.length + 1)
+                let chainMakerNode = {
+                    id: chainMakerNodeId,
+                    label: chainMakerNodeId,
+                    x: x,
+                    y: y,
+                    size: 40,
+                    img: './pictures/chainMakerNode.png',
+                    labelCfg: {
+                        position: 'bottom',
+                        style: {
+                            fill: '#ffffff', // 设置字体颜色
+                            fontSize: 14,
+                            background: {
+                                fill: ReturnLableColor(currentState),
+                                padding: [4, 4, 4, 4]
+                            }
                         }
                     }
                 }
-            }
-            setChainMakerNodes(prevNodes => [...prevNodes, chainMakerNodeId])
-            graph.addItem('node', chainMakerNode);
+                graph.addItem('node', chainMakerNode);
+                return [...prevChainMakerNodes, chainMakerNodeId]
+            })
+            successfullyAdd = true
         } else if (nodeType === "MaliciousNode") { // 进行恶意节点的添加
-            let maliciousNodeId = nodeType + "_" + (maliciousNodes.length + 1)
-            let maliciousNode = {
-                id: maliciousNodeId,
-                label: maliciousNodeId,
-                x: x,
-                y: y,
-                size: 40,
-                img: "./pictures/maliciousNode.png",
-                labelCfg: {
-                    position: 'bottom',
-                    style: {
-                        fill: '#ffffff', // 设置字体颜色
-                        fontSize: 14,
-                        background: {
-                            fill: ReturnLableColor(currentState),
-                            padding: [4, 4, 4, 4]
+            setMaliciousNodes(prevMaliciousNodes => {
+                let maliciousNodeId = nodeType + "_" + (prevMaliciousNodes.length + 1)
+                let maliciousNode = {
+                    id: maliciousNodeId,
+                    label: maliciousNodeId,
+                    x: x,
+                    y: y,
+                    size: 40,
+                    img: "./pictures/maliciousNode.png",
+                    labelCfg: {
+                        position: 'bottom',
+                        style: {
+                            fill: '#ffffff', // 设置字体颜色
+                            fontSize: 14,
+                            background: {
+                                fill: ReturnLableColor(currentState),
+                                padding: [4, 4, 4, 4]
+                            }
                         }
                     }
                 }
-            }
-            setMaliciousNodes(prevNodes => [...prevNodes, maliciousNodeId]);
-            graph.addItem('node', maliciousNode);
+                graph.addItem('node', maliciousNode);
+                return [...prevMaliciousNodes, maliciousNodeId]
+            })
+            successfullyAdd = true
         }
         else {
             console.log("unsupported node type")
         }
+        if (successfullyAdd) {
+            setTotalNodesCount((prev)=>prev+1)
+            startTopologyForm.setFieldsValue({
+                "总节点数量": totalNodesCount + 1,
+            })
+        }
     }
+
     // 9.3 边添加的逻辑
-    function AddEdgeLogic(sourceNodeId, targetNodeId) {
-        graph.addItem("edge", {
-            source: sourceNodeId,
-            target: targetNodeId
-        })
+    function AddEdgeLogic(sourceNodeId, targetNodeId, link_type) {
+        if (link_type === "access") {
+            graph.addItem("edge", {
+                source: sourceNodeId,
+                target: targetNodeId,
+                style: styleForAccessLink,
+            })
+        } else if (link_type === "backbone") {
+            graph.addItem("edge", {
+                source: sourceNodeId,
+                target: targetNodeId,
+                style: styleForBackboneLink,
+            })
+        }
+
     }
     // ---------------------------------------------------------------------------------------------
 
     // 10. 按钮
     // ---------------------------------------------------------------------------------------------
-    // 10.2 进行拓扑的删除
+    // 10.1 进行拓扑的删除
     function StopTopology(){
         setPromptBoxType(promptBoxTypes.stopTopology)
         setPromptBoxOpen(true)
         setPromptBoxTitle("stop topology")
-    }
-    // 10.3 进行攻击按钮的按下
-    function AttackButtonClicked() {
-        setPromptBoxOpen(promptBoxTypes.startAttack)
-        setPromptBoxOpen(true)
-        setPromptBoxTitle("start attack")
+        setPromptBoxText("Please confirm whether to stop topology!")
     }
     // ---------------------------------------------------------------------------------------------
 
-    // 11. 处理表单的提交请求
+    // 11. 处理拓扑启动表单
     // ---------------------------------------------------------------------------------------------
     // 11.1 当验证失败的时候
     function onValidateStartTopologyFailed(){
         setPromptBoxOpen(true)
         setPromptBoxTitle("启动拓扑失败")
-        setPromptBoxText("请完成参数的选择!")
+        if(totalNodesCount > 0){
+            setPromptBoxText("请完成参数的选择!")
+        } else {
+            setPromptBoxText("请至少完成一个拓扑节点的选择!")
+        }
         setPromptBoxType(promptBoxTypes.errorParameters)
     }
 
@@ -630,7 +719,7 @@ export function Topology(props) {
         let tableValues = [
             {
                 key: "1",
-                paramsDescription: networkEnvironmentField[0][0],
+                paramsDescription: networkEnvironmentField[0],
                 paramsValue: selectedNetworkEnvironment
             },
             {
@@ -665,7 +754,7 @@ export function Topology(props) {
             }
         ]
         setPromptBoxOpen(true)
-        setPromptBoxTitle("start topology")
+        setPromptBoxTitle("启动拓扑")
         setPromptBoxText(
             <Table dataSource={tableValues} columns={tableColumns}></Table>
         )
@@ -697,7 +786,198 @@ export function Topology(props) {
     }
     // ---------------------------------------------------------------------------------------------
 
-    // 12. 实际的 HTML 代码
+    // 12. 处理攻击表单
+    // ---------------------------------------------------------------------------------------------
+    // 12.1 当验证失败的时候
+    function onValidateStartAttackFailed(){
+        setPromptBoxOpen(true)
+        setPromptBoxTitle("启动攻击失败")
+        setPromptBoxText("请完成参数的选择!")
+        setPromptBoxType(promptBoxTypes.errorParameters)
+    }
+    // 12.2 当启动攻击的时候
+    function onStartAttackFinish(){
+        let tableValues = [
+            {
+                key: "1",
+                paramsDescription: attackThreadCountField[0],
+                paramsValue: selectedAttackThreadCount
+            },
+            {
+                key: "2",
+                paramsDescription: attackTypeField[0],
+                paramsValue: selectedAttackType
+            },
+            {
+                key: "3",
+                paramsDescription: attackNodeField[0],
+                paramsValue: selectedAttackNode
+            },
+            {
+                key: "4",
+                paramsDescription: attackedNodeField[0],
+                paramsValue: selectedAttackedNode
+            },
+            {
+                key: "5",
+                paramsDescription: attackDurationField[0],
+                paramsValue: selectedAttackDuration
+            }
+        ]
+        setPromptBoxType(promptBoxTypes.startAttack)
+        setPromptBoxOpen(true)
+        setPromptBoxTitle("启动攻击")
+        setPromptBoxText(
+            <Table dataSource={tableValues} columns={tableColumns}></Table>
+        )
+    }
+    // 12.3 当拓扑的值改变的时候
+    function onStartAttackValuesChange(changedValues){
+        if (attackThreadCountField[0] in changedValues) {
+            setSelectedAttackThreadCount(changedValues[attackThreadCountField[0]])
+        }
+        if (attackTypeField[0] in changedValues) {
+            setSelectedAttackType(changedValues[attackTypeField[0]])
+        }
+        if (attackNodeField[0] in changedValues) {
+            setSelectedAttackNode(changedValues[attackNodeField[0]])
+        }
+        if (attackedNodeField[0] in changedValues) {
+            setSelectedAttackedNode(changedValues[attackedNodeField[0]])
+        }
+        if (attackDurationField[0] in changedValues) {
+            setSelectedAttackDuration(changedValues[attackDurationField[0]])
+        }
+    }
+    // ---------------------------------------------------------------------------------------------
+
+
+    // 11. 保存上传拓扑相关代码
+    // ---------------------------------------------------------------------------------------------
+    // 11.1 进行拓扑的保存
+    function saveTopology(){
+        // 进行所有的节点的信息的收集
+        let nodesMap = {}
+        let nodesList = []
+        const graphNodes = graph.getNodes()
+        graphNodes.forEach((graphNode)=>{
+            let nodeID = graphNode.getID()
+            let result = nodeID.split("_")
+            let x = graphNode._cfg.model.x
+            let y = graphNode._cfg.model.y
+            let node = new Node(Number(result[1]), result[0], x, y)
+            nodesMap[nodeID] = node
+            nodesList.push(node)
+        })
+        // 进行所有的边的信息的收集
+        let links = []
+        const graphEdges = graph.getEdges()
+        graphEdges.forEach((graphEdge)=>{
+            let lineWidth = graphEdge._cfg.originStyle["edge-shape"].lineWidth
+            console.log(lineWidth)
+            let lineType = ""
+            if (lineWidth === 2) {
+                lineType = "access"
+            } else if (lineWidth ===  5) {
+                lineType = "backbone"
+            } else {
+                console.log("unsupported line type")
+            }
+            let graphSourceNodeID = graphEdge.getSource().getID()
+            let graphTargetNodeID = graphEdge.getTarget().getID()
+            let sourceNode = nodesMap[graphSourceNodeID]
+            let targetNode = nodesMap[graphTargetNodeID]
+            links.push(new Link(sourceNode, targetNode, lineType))
+        })
+        let data = {
+            "nodes": nodesList,
+            "links": links,
+        }
+        let blob = new Blob([JSON.stringify(data)], { type: "application/json"})
+        let url = window.URL.createObjectURL(blob)
+        let link = document.createElement("a");
+        link.style.display = "none";
+        link.href = url
+        link.setAttribute("download", "topology.txt");
+        document.body.appendChild(link);
+        link.click()
+        document.body.removeChild(link);
+    }
+
+    // 11.2 加载拓扑
+    const uploadProps = {
+        beforeUpload: (file) => {
+            const fileReader = new FileReader()
+            fileReader.onload = (e) => {
+                const fileContent = e.target.result
+                let topologyParams = JSON.parse(fileContent)
+                rebuildGraph(topologyParams, false)
+                message.success({
+                    content: "成功加载拓扑"
+                })
+            }
+            fileReader.onerror = (e) => {
+                message.error({
+                    content: "加载拓扑失败"
+                })
+            }
+            fileReader.readAsText(file)
+            return false
+        },
+        showUploadList: false
+    }
+    // ---------------------------------------------------------------------------------------------
+
+    // 12. 网络环境的变化
+    function onEnvironmentChange(e){
+        const selectedEnvironment = e.target.value
+        if (selectedEnvironment === "广域网环境"){
+            getWideAreaNetworkTopology((response)=>{
+                rebuildGraph(response.data, false)
+                message.success({
+                    content: "成功切换到广域网环境"
+                })
+            }, (error)=>{
+                message.error({
+                    content:  "切换到广域网环境失败"
+                })
+            })
+        } else if (selectedEnvironment === "数据中心环境") {
+            getDataCenterTopology((response)=> {
+                rebuildGraph(response.data, false)
+                message.success({
+                    content: "成功切换到数据中心环境"
+                })
+            }, (error)=>{
+                message.error({
+                    content: "切换到数据中心环境失败"
+                })
+            })
+        } else if (selectedEnvironment === "自组网环境") {
+            getManetTopology((response)=>{
+                rebuildGraph(response.data, false)
+                message.success({
+                    content: "成功切换到自组网环境"
+                })
+            }, (error)=> {
+                message.error({
+                    content: "切换到自组网环境失败"
+                })
+            })
+        } else {
+            let emptyTopologyInfo = {
+                nodes: [],
+                links: []
+            }
+            rebuildGraph(emptyTopologyInfo, false)
+            message.success({
+                content: "成功切换到自定义环境"
+            })
+        }
+    }
+
+    // 13. 实际的 HTML 代码
+    // 13.1
     return (
         <div>
             {/*空行*/}
@@ -718,7 +998,7 @@ export function Topology(props) {
                     </Row>
                     {/*第3行*/}
                     <Row style={{marginLeft: "2vw", marginRight:"2vw"}}>
-                        <Col span={8} style={{textAlign: "center"}}>
+                        <Col span={5} style={{textAlign: "center"}}>
                             <Select
                                 defaultValue="Router"
                                 style={{width: "80%"}}
@@ -731,16 +1011,16 @@ export function Topology(props) {
                                 }))}
                             />
                         </Col>
-                        <Col span={8} style={{textAlign: "center"}}>
+                        <Col span={5} style={{textAlign: "center"}}>
                             <Button
                                 type={"primary"}
                                 style={{width: "80%"}}
                                 disabled={currentTopologyState}
                                 onClick={AddNodeButtonClicked}>
-                                add node
+                                添加节点
                             </Button>
                         </Col>
-                        <Col span={8} style={{textAlign: "center"}}>
+                        <Col span={5} style={{textAlign: "center"}}>
                             <Select
                                 defaultValue={"接入链路"}
                                 style={{width: "80%"}}
@@ -751,20 +1031,51 @@ export function Topology(props) {
                                 onChange={(value)=>{
                                     if(value === "接入链路") {
                                         graph.get("defaultEdge").style = styleForAccessLink
-                                        graph.refresh()
                                     } else if (value === "骨干链路") {
                                         graph.get("defaultEdge").style = styleForBackboneLink
-                                        graph.refresh()
                                     } else {
                                         console.log("unsupported link type")
                                     }
                                 }}
                             >
-
                             </Select>
                         </Col>
+                        <Col span={1}></Col>
+                        <Col span={4}>
+                            <Button
+                                type={"primary"}
+                                style={{width: "80%"}}
+                                onClick={saveTopology}>
+                                保存拓扑
+                            </Button>
+                        </Col>
+                        <Col span={4}>
+                            <Upload {...uploadProps}>
+                                <Button icon={<UploadOutlined />}>上传拓扑</Button>
+                            </Upload>
+                        </Col>
                     </Row>
-                    {/*第4行*/}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                     <Row style={{marginLeft: "2vw", marginRight:"2vw"}}>
                         <Divider
                             style={{
@@ -776,6 +1087,7 @@ export function Topology(props) {
                     </Row>
                     {/*注意 Form 是可以当成一行的*/}
                     <Form
+                        form={startTopologyForm}
                         name={"topology start form"}
                         onFinishFailed={onValidateStartTopologyFailed}
                         onFinish={onStartTopologyFinish}
@@ -795,6 +1107,7 @@ export function Topology(props) {
                             [consensusNodeCpuField[0]]: selectedConsensusNodeCpuLimit,
                             [consensusNodeMemoryField[0]]: selectedConsensusNodeMemoryLimit,
                             [consensusThreadCountField[0]]: selectedConsensusThreadCount,
+                            [totalNodesCountField[0]]: totalNodesCount,
                         }}
                     >
                         <Row style={{marginLeft: "2vw", marginRight:"2vw"}}>
@@ -816,9 +1129,7 @@ export function Topology(props) {
                                     }}
                                 >
                                     <Radio.Group
-                                        onChange={(e)=>{
-                                        setSelectedNetworkEnvironment(e.target.value)
-                                    }} value={selectedNetworkEnvironment} style={{width: "100%"}}>
+                                        onChange={onEnvironmentChange} value={selectedNetworkEnvironment} style={{width: "100%"}}>
                                         <Radio value={"广域网环境"}>广域网环境</Radio>
                                         <Radio value={"数据中心环境"}>数据中心环境</Radio>
                                         <Radio value={"自组网环境"}>自组网环境</Radio>
@@ -938,6 +1249,26 @@ export function Topology(props) {
                                 </Form.Item>
                             </Col>
                         </Row>
+                        <Row style={{marginLeft: "2vw", marginRight:"2vw", display: "none"}}>
+                            <Form.Item
+                                label={totalNodesCountField[0]}
+                                name={totalNodesCountField[0]}
+                                rules={[
+                                    {
+                                        validator: (rule, value, callback) => {
+                                            if (value === 0) {
+                                                return Promise.reject("拓扑至少存在一个节点");
+                                            }
+                                            else {
+                                                return Promise.resolve()
+                                            }
+                                        },
+                                    },
+                                ]}
+                            >
+                                <InputNumber></InputNumber>
+                            </Form.Item>
+                        </Row>
                         <Row style={{marginLeft: "2vw", marginRight:"2vw"}}>
                             <Col span={2}></Col>
                             <Col span={10}  style={{textAlign: "center"}}>
@@ -946,7 +1277,7 @@ export function Topology(props) {
                                     style={{width: "80%", backgroundColor:'#28c016'}}
                                     disabled={currentTopologyState}
                                     htmlType={"submit"}>
-                                    start topology
+                                    启动拓扑
                                 </Button>
                             </Col>
                             <Col span={2}></Col>
@@ -957,11 +1288,37 @@ export function Topology(props) {
                                     style={{width: "80%"}}
                                     disabled={!currentTopologyState}
                                     onClick={StopTopology}>
-                                    stop topology
+                                    停止拓扑
                                 </Button>
                             </Col>
                         </Row>
                     </Form>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                     <Row style={{marginLeft: "2vw", marginRight:"2vw"}}>
                         <Divider
                             style={{
@@ -972,6 +1329,10 @@ export function Topology(props) {
                         </Divider>
                     </Row>
                     <Form
+                        name={"attack start form"}
+                        onFinishFailed={onValidateStartAttackFailed}
+                        onFinish={onStartAttackFinish}
+                        onValuesChange={onStartAttackValuesChange}
                         labelCol={{
                             span: 12,
                         }}
@@ -1093,9 +1454,9 @@ export function Topology(props) {
                                 <Button
                                     type={"primary"}
                                     style={{width: "80%"}}
+                                    htmlType={"submit"}
                                     danger
-                                    disabled={currentAttackState}
-                                    onClick={AttackButtonClicked}>
+                                    disabled={currentAttackState}>
                                     开始攻击
                                 </Button>
                             </Col>
@@ -1114,7 +1475,7 @@ export function Topology(props) {
                     </Row>
                     {/*第5行*/}
                     <Row style={{marginLeft: "2vw", marginRight:"2vw"}}>
-                        <div ref={graphDivRef} id="graph" style={{backgroundColor: "grey", width: "100%", height: "36.5vw"}}>
+                        <div ref={graphDivRef} id="graph" style={{backgroundColor: "grey", width: "100%", height: "32.1vw"}}>
                         </div>
                     </Row>
                 </Col>
