@@ -1,7 +1,8 @@
-import {Card, Row, Tabs, Typography, message} from "antd";
+import {Card, Row, Tabs, Typography, message, Col, Button} from "antd";
 import {useEffect, useState} from "react";
-import {startWebShell, stopWebShell} from "../requests/instance"
+import {startWebShell, stopWebShell, startCaptureInterfaceRate, stopCaptureInterfaceRate} from "../requests/instance"
 import {useParams} from "react-router-dom";
+import ReactECharts from 'echarts-for-react'
 
 export function Instance(props) {
 
@@ -15,7 +16,39 @@ export function Instance(props) {
     // 3. 上来就加载一个默认的界面
     useEffect(() => {
         AddWebShellLogic()
+        StartCapture()
+
+        window.addEventListener('beforeunload', ()=>{
+            StopCapture()
+        })
+
+        // 当界面析构时候的逻辑
+        return ()=>{
+            window.removeEventListener('beforeunload', ()=>{
+                StopCapture()
+            })
+        }
     }, [])
+
+    function StartCapture() {
+        let params = {
+            container_name: containerName.replace("_", "-")
+        }
+        startCaptureInterfaceRate(params, (response)=>{
+            console.log("成功开启监听")
+        }, (error)=>{
+            console.log("监听失败")
+        })
+    }
+
+    function StopCapture(){
+        let params = {
+            container_name: containerName.replace("_", "-")
+        }
+        stopCaptureInterfaceRate(params)
+    }
+
+
 
     // 4. 添加的逻辑
     function AddWebShellLogic(){
@@ -78,10 +111,53 @@ export function Instance(props) {
         })
     }
 
+    // 6. option for rate
+    const rateOption = {
+        title: {
+            text: '节点被攻击速率'
+        },
+        tooltip: {},
+        legend: {
+            data:['节点被攻击速率']
+        },
+        xAxis: {
+            data: []
+        },
+        yAxis: {},
+        series: [{
+            name: 'CPU使用率',
+            type:'line',
+            data:[]
+        }]
+    }
+
 
     return (
         <div>
-            <Row justify="center">
+            <Row justify={"center"}>
+                <Col span={12}>
+                    <Card>
+                        <ReactECharts
+                            option={rateOption}
+                            style={{height: "30vh", width: "40vw"}}
+                        >
+
+                        </ReactECharts>
+                    </Card>
+                </Col>
+                <Col span={12}>
+                    <Card>
+                        <ReactECharts
+                            option={rateOption}
+                            style={{height: "30vh", width: "40vw"}}
+                        >
+
+                        </ReactECharts>
+                    </Card>
+
+                </Col>
+            </Row>
+            <Row justify={"center"}>
                 <Typography.Title level={4}>WebShell</Typography.Title>
                 <Card style={{width:"90vw",marginLeft:"5vw",marginRight:"5vw", height:"30vw"}}>
                     <Tabs

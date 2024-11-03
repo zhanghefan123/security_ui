@@ -5,10 +5,12 @@ import {RoutesMapping} from "./RoutesContainer";
 function GenerateHorizontalBarItems(){
     let resultList = []
     RoutesMapping.forEach((value, key) => {
-        resultList.push({
-            key: key,
-            label: <NavLink to={value[1]}>{value[0]}</NavLink>
-        })
+        if (value[0] !== "命令行") {
+            resultList.push({
+                key: key,
+                label: <NavLink to={value[1]}>{value[0]}</NavLink>
+            })
+        }
     })
     return resultList
 }

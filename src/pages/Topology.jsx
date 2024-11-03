@@ -281,6 +281,7 @@ export function Topology(props) {
                 let sourceNodeId = link["source_node"]["type"] + "_" + link["source_node"]["index"]
                 let targetNodeId = link["target_node"]["type"] + "_" + link["target_node"]["index"]
                 let link_type = link["link_type"]
+                console.log(link_type)
                 AddEdgeLogic(sourceNodeId, targetNodeId, link_type)
             }
         }, 1)
@@ -405,8 +406,7 @@ export function Topology(props) {
             let links = []
             const graphEdges = graph.getEdges()
             graphEdges.forEach((graphEdge)=>{
-                // console.log(graphEdge._cfg.styles.selected.lineWidth) 这里进行的是边的粗细的输出
-                let lineWidth = graphEdge._cfg.styles.selected.lineWidth
+                let lineWidth = graphEdge._cfg.originStyle["edge-shape"].lineWidth
                 let lineType = ""
                 if (lineWidth === 2) {
                     lineType = "access"
@@ -473,11 +473,11 @@ export function Topology(props) {
             let params = {
                 attack_thread_count: selectedAttackThreadCount,
                 attack_type: selectedAttackType,
-                attack_node: selectedAttackNode,
-                attacked_node: selectedAttackedNode,
+                attack_node: selectedAttackNode.replace("_", "-"),
+                attacked_node: selectedAttackedNode.replace("_", "-"),
                 attack_duration: selectedAttackDuration
             }
-            let splitContent = selectedAttackNode.split("_")
+            let splitContent = selectedAttackNode.split("_")  // 准备拿到类型和 id
             startAttackRequest(parseInt(splitContent[1]), params, (response)=>{
                 message.success({
                     content: `成功发动攻击`
@@ -694,8 +694,8 @@ export function Topology(props) {
     function StopTopology(){
         setPromptBoxType(promptBoxTypes.stopTopology)
         setPromptBoxOpen(true)
-        setPromptBoxTitle("stop topology")
-        setPromptBoxText("Please confirm whether to stop topology!")
+        setPromptBoxTitle("停止拓扑")
+        setPromptBoxText("请确认是否停止拓扑!")
     }
     // ---------------------------------------------------------------------------------------------
 
@@ -1274,7 +1274,7 @@ export function Topology(props) {
                             <Col span={10}  style={{textAlign: "center"}}>
                                 <Button
                                     type={"primary"}
-                                    style={{width: "80%", backgroundColor:'#28c016'}}
+                                    style={{width: "100%", backgroundColor:'#28c016'}}
                                     disabled={currentTopologyState}
                                     htmlType={"submit"}>
                                     启动拓扑
@@ -1285,7 +1285,7 @@ export function Topology(props) {
                                 <Button
                                     type={"primary"}
                                     danger
-                                    style={{width: "80%"}}
+                                    style={{width: "100%"}}
                                     disabled={!currentTopologyState}
                                     onClick={StopTopology}>
                                     停止拓扑
@@ -1453,7 +1453,7 @@ export function Topology(props) {
                             <Col span={10} style={{textAlign: "center"}}>
                                 <Button
                                     type={"primary"}
-                                    style={{width: "80%"}}
+                                    style={{width: "100%"}}
                                     htmlType={"submit"}
                                     danger
                                     disabled={currentAttackState}>
