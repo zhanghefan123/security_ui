@@ -9,6 +9,9 @@ const getDataCenterTopologyUrl = "/topologies/datacenter_topology.txt"
 const getManetTopologyUrl = "/topologies/manet_topology.txt"
 const startAttackRequestUrl = "startAttack"
 
+const startTxRateTestUrl = "startTxRateTest"
+const stopTxRateTestUrl = "stopTxRateTest"
+
 // startToplogy 启动的时候的函数
 export const startTopology = (params, response_callback, error_callback) => {
     axios.post(`${UrlBase}/${startTopologyUrl}`, params).then(response=>{
@@ -68,6 +71,23 @@ export const startAttackRequest = (maliciousNodeId, params, response_callback, e
     let listeningPort = parseInt(topologyServerPort) + maliciousNodeId
     console.log(`http://${topologyServerAddr}:${listeningPort}/${startAttackRequestUrl}`)
     axios.post(`http://${topologyServerAddr}:${listeningPort}/${startAttackRequestUrl}`, params).then((response)=>{
+        response_callback(response)
+    }, (error)=>{
+        error_callback(error)
+    })
+}
+
+
+export const startTxRateTest = (response_callback, error_callback) => {
+    axios.post(`${UrlBase}/${startTxRateTestUrl}`).then((response)=>{
+        response_callback(response)
+    }, (error)=>{
+        error_callback(error)
+    })
+}
+
+export const stopTxRateTest = (response_callback, error_callback) => {
+    axios.post(`${UrlBase}/${stopTxRateTestUrl}`).then((response)=>{
         response_callback(response)
     }, (error)=>{
         error_callback(error)
