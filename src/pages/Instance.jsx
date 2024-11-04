@@ -12,35 +12,50 @@ export function Instance(props) {
     // 2. 一些状态属性
     const [tabs, setTabs] = useState([])
     const [activeTab, setActiveTab] = useState()
+    const [timeList, setTimeList] = useState([])
+    const [rateList, setRateList] = useState([])
 
     // 3. 上来就加载一个默认的界面
     useEffect(() => {
+        // 3.1 为相应的容器开启第一个 webshell
         AddWebShellLogic()
-        StartCapture()
 
+        // 3.2 开启抓包线程
+        let captureTimer = setInterval(()=>{
+            StartCapture()
+        }, 1000)
+
+        // 3.3 添加在页面被释放之前的卸载
         window.addEventListener('beforeunload', ()=>{
             StopCapture()
         })
 
-        // 当界面析构时候的逻辑
+        // 3.4 当界面析构时候的逻辑
         return ()=>{
             window.removeEventListener('beforeunload', ()=>{
                 StopCapture()
+                clearInterval(captureTimer)
             })
         }
     }, [])
 
+    // 4. 开启抓包
     function StartCapture() {
         let params = {
             container_name: containerName.replace("_", "-")
         }
         startCaptureInterfaceRate(params, (response)=>{
-            console.log("成功开启监听")
+            // console.log("成功开启监听")
+            setTimeList(response.data["time_list"])
+            setRateList(response.data["rate_list"])
         }, (error)=>{
-            console.log("监听失败")
+            message.error({
+                content: "监听失败"
+            })
         })
     }
 
+    // 5. 停止抓包
     function StopCapture(){
         let params = {
             container_name: containerName.replace("_", "-")
@@ -48,9 +63,7 @@ export function Instance(props) {
         stopCaptureInterfaceRate(params)
     }
 
-
-
-    // 4. 添加的逻辑
+    // 6. 添加webshell的逻辑
     function AddWebShellLogic(){
         const containerTypeAndId = containerName.split("_")
         const realContainerName = containerTypeAndId[0] + "-" + containerTypeAndId[1]
@@ -85,7 +98,7 @@ export function Instance(props) {
         })
     }
 
-    // 5. 删除的逻辑
+    // 7. 删除webshell 的逻辑
     function StopWebShellLogic(targetKey){
         const deleteTabIndex = tabs.findIndex((tab)=> tab.key === targetKey)
         let params = {
@@ -111,7 +124,7 @@ export function Instance(props) {
         })
     }
 
-    // 6. option for rate
+    // 8. option for rate
     const rateOption = {
         title: {
             text: '节点被攻击速率'
@@ -121,13 +134,13 @@ export function Instance(props) {
             data:['节点被攻击速率']
         },
         xAxis: {
-            data: []
+            data: timeList
         },
         yAxis: {},
         series: [{
             name: 'CPU使用率',
             type:'line',
-            data:[]
+            data: rateList
         }]
     }
 
@@ -151,36 +164,36 @@ export function Instance(props) {
                             option={rateOption}
                             style={{height: "30vh", width: "40vw"}}
                         >
-
                         </ReactECharts>
                     </Card>
 
                 </Col>
             </Row>
-            <Row justify={"center"}>
-                <Typography.Title level={4}>WebShell</Typography.Title>
-                <Card style={{width:"90vw",marginLeft:"5vw",marginRight:"5vw", height:"30vw"}}>
-                    <Tabs
-                        type="editable-card"
-                        style={{width:"100%"}}
-                        activeKey={activeTab}
-                        onChange={(newActiveKey)=>{
-                            setActiveTab(newActiveKey)
-                        }}
-                        // onEdit 是点击增加或者删除的按钮
-                        onEdit={(targetKey, action) => {
-                            // 开启一个新的 webshell
-                            if (action === "add") {
-                                AddWebShellLogic()
-                            } else if (action === "remove") {
-                                StopWebShellLogic(targetKey)
-                            } else {
-                                console.log("unsupported operation")
-                            }
-                        }}
-                        items={tabs}
-                    />
-                </Card>
+            <Row justify={"center"} style={{width: "100%"}}>
+                <Col span={24}>
+                    <Card style={{height:"30vw"}}>
+                        <Tabs
+                            type="editable-card"
+                            style={{width:"100%"}}
+                            activeKey={activeTab}
+                            onChange={(newActiveKey)=>{
+                                setActiveTab(newActiveKey)
+                            }}
+                            // onEdit 是点击增加或者删除的按钮
+                            onEdit={(targetKey, action) => {
+                                // 开启一个新的 webshell
+                                if (action === "add") {
+                                    AddWebShellLogic()
+                                } else if (action === "remove") {
+                                    StopWebShellLogic(targetKey)
+                                } else {
+                                    console.log("unsupported operation")
+                                }
+                            }}
+                            items={tabs}
+                        />
+                    </Card>
+                </Col>
             </Row>
         </div>
     )

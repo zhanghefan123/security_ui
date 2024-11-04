@@ -1475,7 +1475,7 @@ export function Topology(props) {
                     </Row>
                     {/*第5行*/}
                     <Row style={{marginLeft: "2vw", marginRight:"2vw"}}>
-                        <div ref={graphDivRef} id="graph" style={{backgroundColor: "grey", width: "100%", height: "32.1vw"}}>
+                        <div ref={graphDivRef} id="graph" style={{backgroundColor: "grey", width: "100%", height: "66.3vh"}}>
                         </div>
                     </Row>
                 </Col>
