@@ -13,7 +13,8 @@ export function Instance(props) {
     const [tabs, setTabs] = useState([])
     const [activeTab, setActiveTab] = useState()
     const [timeList, setTimeList] = useState([])
-    const [rateList, setRateList] = useState([])
+    const [interfaceRateList, setInterfaceRateList] = useState([])
+    const [cpuRatioList, setCpuRatioList] = useState([])
 
     // 3. 上来就加载一个默认的界面
     useEffect(() => {
@@ -47,7 +48,8 @@ export function Instance(props) {
         startCaptureInterfaceRate(params, (response)=>{
             // console.log("成功开启监听")
             setTimeList(response.data["time_list"])
-            setRateList(response.data["rate_list"])
+            setInterfaceRateList(response.data["interface_rate_list"])
+            setCpuRatioList(response.data["cpu_ratio_list"])
         }, (error)=>{
             message.error({
                 content: "监听失败"
@@ -125,7 +127,7 @@ export function Instance(props) {
     }
 
     // 8. option for rate
-    const rateOption = {
+    const interfaceRateOption = {
         title: {
             text: '节点被攻击速率'
         },
@@ -168,7 +170,61 @@ export function Instance(props) {
             name: '被攻击速率',
             type:'line',
             yAxisIndex: 0,
-            data: rateList,
+            data: interfaceRateList,
+            lineStyle: {
+                width: 4,
+                color: "rgb(222,7,7)",
+            },
+            smooth: false,
+            symbolSize: 15,
+            color: "rgb(222,7,7)",
+        }]
+    }
+
+    const cpuRateOption = {
+        title: {
+            text: "节点 CPU 利用率",
+        },
+        grid: {
+            left: "80px",
+            right: "80px"
+        },
+        tooltip: {
+            trigger: "axis"
+        },
+        legend: {
+            data:['节点 CPU 利用率'],
+            textStyle: {
+                fontSize: 15, // 图例字体大小
+            }
+        },
+        xAxis: {
+            name: "时间/S",
+            type: "category",
+            data: timeList,
+            axisLabel: {
+                fontSize: 15
+            },
+            nameTextStyle: {
+                fontSize: 20
+            }
+        },
+        yAxis: {
+            name: "节点 CPU 利用率",
+            type: "value",
+            axisLabel: {
+                formatter: '{value}',
+                fontSize: 15
+            },
+            nameTextStyle: {
+                fontSize: 20
+            }
+        },
+        series: [{
+            name: '节点 CPU 利用率',
+            type:'line',
+            yAxisIndex: 0,
+            data: cpuRatioList,
             lineStyle: {
                 width: 4,
                 color: "rgb(222,7,7)",
@@ -186,7 +242,7 @@ export function Instance(props) {
                 <Col span={12}>
                     <Card>
                         <ReactECharts
-                            option={rateOption}
+                            option={interfaceRateOption}
                             style={{height: "30vh", width: "40vw"}}
                         >
 
@@ -196,7 +252,7 @@ export function Instance(props) {
                 <Col span={12}>
                     <Card>
                         <ReactECharts
-                            option={rateOption}
+                            option={cpuRateOption}
                             style={{height: "30vh", width: "40vw"}}
                         >
                         </ReactECharts>
