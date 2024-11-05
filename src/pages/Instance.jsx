@@ -129,18 +129,53 @@ export function Instance(props) {
         title: {
             text: '节点被攻击速率'
         },
-        tooltip: {},
+        grid: {
+            left: "80px",
+            right: "80px"
+        },
+        tooltip: {
+            trigger: "axis"
+        },
         legend: {
-            data:['节点被攻击速率']
+            data:['节点被攻击速率'],
+            textStyle: {
+                fontSize: 15, // 图例字体大小
+            }
         },
         xAxis: {
-            data: timeList
+            name: "时间/S",
+            type: "category",
+            data: timeList,
+            axisLabel: {
+                fontSize: 15
+            },
+            nameTextStyle: {
+                fontSize: 20
+            }
         },
-        yAxis: {},
+        yAxis: {
+            name: "被攻击速率",
+            type: "value",
+            axisLabel: {
+                formatter: '{value}',
+                fontSize: 15
+            },
+            nameTextStyle: {
+                fontSize: 20
+            }
+        },
         series: [{
-            name: 'CPU使用率',
+            name: '被攻击速率',
             type:'line',
-            data: rateList
+            yAxisIndex: 0,
+            data: rateList,
+            lineStyle: {
+                width: 4,
+                color: "rgb(222,7,7)",
+            },
+            smooth: false,
+            symbolSize: 15,
+            color: "rgb(222,7,7)",
         }]
     }
 

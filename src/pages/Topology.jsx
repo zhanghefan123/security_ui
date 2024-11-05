@@ -190,18 +190,53 @@ export function Topology(props) {
         title: {
             text: ''
         },
-        tooltip: {},
+        grid: {
+            left: "80px",
+            right: "80px"
+        },
+        tooltip: {
+            trigger: 'axis'
+        },
         legend: {
-            data:['共识速率/tps']
+            data:['共识速率/tps'],
+            textStyle: {
+                fontSize: 15, // 图例字体大小
+            }
         },
         xAxis: {
-            data: timeList
+            name: "时间/S",
+            type: "category",
+            data: timeList,
+            axisLabel: {
+                fontSize: 15
+            },
+            nameTextStyle: {
+                fontSize: 20
+            }
         },
-        yAxis: {},
+        yAxis: {
+            name: "共识速率/TPS",
+            type: "value",
+            axisLabel: {
+                formatter: '{value}',
+                fontSize: 15
+            },
+            nameTextStyle: {
+                fontSize: 20
+            }
+        },
         series: [{
-            name: '共识速率',
+            name: '共识速率/TPS',
             type:'line',
-            data: currentTps
+            yAxisIndex: 0,
+            data: currentTps,
+            lineStyle: {
+                width: 4,
+                color: "rgb(79,222,7)",
+            },
+            smooth: false,
+            symbolSize: 15,
+            color: "rgb(79,222,7)",
         }]
     }
     // ---------------------------------------------------------------------------------------------
