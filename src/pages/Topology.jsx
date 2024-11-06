@@ -1,6 +1,6 @@
 import * as G6 from "@antv/g6";
 import React, {useEffect, useRef, useState} from "react";
-import {Button, Col, Divider, Form, message, Modal, Radio, Row, Select, Table, Upload} from "antd";
+import {Button, Card, Col, Form, message, Modal, Radio, Row, Select, Table, Upload} from "antd";
 import {Node} from "../entities/node"
 import {Link} from "../entities/link"
 import {
@@ -14,7 +14,8 @@ import {InputNumber} from "antd/lib";
 import {ProForm} from "@ant-design/pro-components";
 import {UploadOutlined} from "@ant-design/icons";
 import ReactECharts from "echarts-for-react";
-const { getLabelPosition, transform } = G6.Util;
+
+const {getLabelPosition, transform} = G6.Util;
 
 // NetworkNodeType_NormalSatellite    NetworkNodeType = 0 (constellation 专用)
 // NetworkNodeType_ConsensusSatellite NetworkNodeType = 1 (constellation 专用)
@@ -85,7 +86,7 @@ export function Topology(props) {
     // 1. 参数的定义
     // ---------------------------------------------------------------------------------------------
     // 1.1 节点和链路类型
-    const nodeTypes= [
+    const nodeTypes = [
         "Router",
         "NormalNode",
         "ConsensusNode",
@@ -116,9 +117,9 @@ export function Topology(props) {
     const networkEnvironmentField = ["网络环境", "network_env"]
     const blockchainTypeField = ["区块链类型", "blockchain_type"]
     const consensusTypeField = ["共识类型", "consensus_type"]
-    const accessLinkBandwidthField = ["接入链路带宽", "access_link_bandwidth"]
-    const consensusNodeCpuField = ["共识节点CPU", "consensus_node_cpu"]
-    const consensusNodeMemoryField = ["共识节点内存", "consensus_node_memory"]
+    const accessLinkBandwidthField = ["接入链路带宽", "接入链路带宽(mbps)"]
+    const consensusNodeCpuField = ["共识节点CPU", "共识节点CPU(个)"]
+    const consensusNodeMemoryField = ["共识节点内存", "共识节点内存 (MB)"]
     const consensusThreadCountField = ["共识线程数量", "consensus_thread_count"]
     const totalNodesCountField = ["总节点数量", "total_node_count"]
     // 1.3 所有攻击相关的表单字段
@@ -136,20 +137,14 @@ export function Topology(props) {
         "BIDL": ["PBFT-并行", "PBFT-串行"],
         "百度超级链": ["TDPoS", "PoA"]
     }
-    // 1.5 split 分割线的内容
-    const firstSplitContent = "拓扑配置界面"
-    const secondSplitContent = "区块链系统配置"
-    const topologySplitContent = "拓扑"
-    const attackSplitContent = "攻击配置"
-    const consensusSplitContent = "共识配置"
     // 1.6 所有的拓扑创建相关的表单字段
     const [selectedBlockchain, setSelectedBlockchain] = useState(blockchainTypes[0])
     const [availableConsensusTypes, setAvailableConsensusTypes] = useState(consensusTypes[blockchainTypes[0]])
     const [selectedConsensusType, setSelectedConsensusType] = useState(consensusTypes[blockchainTypes[0]][0])
     const [selectedNetworkEnvironment, setSelectedNetworkEnvironment] = useState("自定义环境")
     const [selectedAccessLinkBandwidth, setSelectedAccessLinkBandwidth] = useState(1)
-    const [selectedConsensusNodeCpuLimit, setSelectedConsensusNodeCpuLimit] = useState(0.5)
-    const [selectedConsensusNodeMemoryLimit, setSelectedConsensusNodeMemoryLimit] = useState(0.5)
+    const [selectedConsensusNodeCpuLimit, setSelectedConsensusNodeCpuLimit] = useState(1)
+    const [selectedConsensusNodeMemoryLimit, setSelectedConsensusNodeMemoryLimit] = useState(512)
     const [selectedConsensusThreadCount, setSelectedConsensusThreadCount] = useState(10)
     // 1.7 所有的攻击相关的表单字段
     const [selectedAttackThreadCount, setSelectedAttackThreadCount] = useState(10)
@@ -169,8 +164,8 @@ export function Topology(props) {
     // 1.9 引用 dom 节点
     const graphDivRef = useRef(null); // 创建一个
     // 1.10 当前 tps
-    const [timeList, setTimeList] = useState([1,2,3])
-    const [currentTps, setCurrentTps] = useState([1,2,3])
+    const [timeList, setTimeList] = useState([1, 2, 3])
+    const [currentTps, setCurrentTps] = useState([1, 2, 3])
     const [txRateTimer, setTxRateTimer] = useState()
     // 1.11 参数表格
     const tableColumns = [
@@ -198,7 +193,7 @@ export function Topology(props) {
             trigger: 'axis'
         },
         legend: {
-            data:['共识速率/tps'],
+            data: ['共识速率/tps'],
             textStyle: {
                 fontSize: 15, // 图例字体大小
             }
@@ -227,7 +222,7 @@ export function Topology(props) {
         },
         series: [{
             name: '共识速率/TPS',
-            type:'line',
+            type: 'line',
             yAxisIndex: 0,
             data: currentTps,
             lineStyle: {
@@ -326,31 +321,31 @@ export function Topology(props) {
             let sourceId = source.getID()
             let targetId = target.getID()
             // 逻辑1: 防止进行重复的边的创建
-            let sameNodeEdges = graphTmp.findAll("edge", (edge)=>{
+            let sameNodeEdges = graphTmp.findAll("edge", (edge) => {
                 let oneDirection = (edge.getSource().getID() === sourceId) && (edge.getTarget().getID() === targetId)
                 let anotherDirection = (edge.getSource().getID() === targetId) && (edge.getTarget().getID() === sourceId)
                 return oneDirection || anotherDirection
             })
             if (sameNodeEdges.length === 2) {
                 // 删除的时候, 如果删自己的就会发生错误, 状态不一致, 这个时候需要使用 setTimeout
-                setTimeout(()=>{
+                setTimeout(() => {
                     graphTmp.removeItem(sameNodeEdges[0])
                     message.error({
                         content: "cannot create multiple edges between two nodes"
                     })
-                },0)
+                }, 0)
             }
             // 逻辑2: 防止创建指向自己的边
-            let edgesPointToSelf = graphTmp.findAll("edge", (edge)=>{
+            let edgesPointToSelf = graphTmp.findAll("edge", (edge) => {
                 return edge.getSource().getID() === edge.getTarget().getID()
             })
-            if (edgesPointToSelf.length === 1){
-                setTimeout(()=>{
+            if (edgesPointToSelf.length === 1) {
+                setTimeout(() => {
                     graphTmp.removeItem(edgesPointToSelf[0])
                     message.error({
                         content: "cannot create an edge point to itself"
                     })
-                },0)
+                }, 0)
             }
         });
         setGraph(graphTmp)
@@ -361,8 +356,8 @@ export function Topology(props) {
     // 5. 在创建图之后, 进行拓扑状态的获取 - 组件初始化的第二步
     // ---------------------------------------------------------------------------------------------
     useEffect(() => {
-        if(createGraph===1){
-            getTopologyState((response)=>{
+        if (createGraph === 1) {
+            getTopologyState((response) => {
                 if (response.data["state"] === "up") {
                     startTopologyForm.setFieldsValue({
                         "网络环境": response.data["topology_params"]["network_env"],
@@ -375,7 +370,7 @@ export function Topology(props) {
                     })
                     setCurrentTopologyState(true)
                     rebuildGraph(response.data["topology_params"], true)
-                } else if(response.data["state"] === "down") {
+                } else if (response.data["state"] === "down") {
                     setCurrentTopologyState(false)
                 } else {
                     message.error({
@@ -383,7 +378,7 @@ export function Topology(props) {
                     })
                 }
                 setGetState(1)
-            }, (error)=>{
+            }, (error) => {
                 message.error({
                     content: "could not get the status from the backend server"
                 })
@@ -391,8 +386,8 @@ export function Topology(props) {
         }
     }, [createGraph]);
 
-    useEffect(()=>{
-        return ()=>{
+    useEffect(() => {
+        return () => {
             if (txRateTimer) {
                 clearInterval(txRateTimer)
             }
@@ -407,8 +402,8 @@ export function Topology(props) {
             let node = topology_params["nodes"][i]
             AddNodeLogic(node["type"], node["x"], node["y"], state)
         }
-        setTimeout(()=>{
-            for (let i = 0; i < topology_params["links"].length; i++){
+        setTimeout(() => {
+            for (let i = 0; i < topology_params["links"].length; i++) {
                 let link = topology_params["links"][i]
                 let sourceNodeId = link["source_node"]["type"] + "_" + link["source_node"]["index"]
                 let targetNodeId = link["target_node"]["type"] + "_" + link["target_node"]["index"]
@@ -419,7 +414,7 @@ export function Topology(props) {
         }, 1)
     }
 
-    function clearState(){
+    function clearState() {
         graph.clear()
         setRouters([])
         setNormalNodes([])
@@ -428,12 +423,13 @@ export function Topology(props) {
         setMaliciousNodes([])
         setTotalNodesCount([])
     }
+
     // ---------------------------------------------------------------------------------------------
 
     // 6. 向图之中进行组件的添加, 组件初始化的第三步
     // ---------------------------------------------------------------------------------------------
     useEffect(() => {
-        if (getState === 1){
+        if (getState === 1) {
             let nodeMenu = undefined
             let edgeMenu = undefined
             if (graph) {
@@ -464,8 +460,8 @@ export function Topology(props) {
                                     content: "still cannot create webshell"
                                 })
                             }
-                        } else if (target.textContent === "删除节点"){
-                            setTimeout(()=>{
+                        } else if (target.textContent === "删除节点") {
+                            setTimeout(() => {
                                 graph.removeItem(item)
                             }, 0)
                             message.success("成功删除节点" + item.getID())
@@ -487,7 +483,7 @@ export function Topology(props) {
                         return outDiv
                     },
                     handleMenuClick(target, item, graph) {
-                        if(target.textContent === "删除边") {
+                        if (target.textContent === "删除边") {
                             graph.removeItem(item)
                             message.success({
                                 content: "成功删除边"
@@ -519,13 +515,13 @@ export function Topology(props) {
     // ---------------------------------------------------------------------------------------------
     // 7.1 当提示框点击了 OK 的时候
     function handlePromptOkCicked() {
-        if(promptBoxType === promptBoxTypes.startTopology) { // 如果是启动拓扑的话
+        if (promptBoxType === promptBoxTypes.startTopology) { // 如果是启动拓扑的话
             setPromptBoxLoading(true)
             // 进行所有的节点的信息的收集
             let nodesMap = {}
             let nodesList = []
             const graphNodes = graph.getNodes()
-            graphNodes.forEach((graphNode)=>{
+            graphNodes.forEach((graphNode) => {
                 let nodeID = graphNode.getID()
                 let result = nodeID.split("_")
                 let x = graphNode._cfg.model.x
@@ -537,12 +533,12 @@ export function Topology(props) {
             // 进行所有的边的信息的收集
             let links = []
             const graphEdges = graph.getEdges()
-            graphEdges.forEach((graphEdge)=>{
+            graphEdges.forEach((graphEdge) => {
                 let lineWidth = graphEdge._cfg.originStyle["edge-shape"].lineWidth
                 let lineType = ""
                 if (lineWidth === 2) {
                     lineType = "access"
-                } else if (lineWidth ===  5) {
+                } else if (lineWidth === 5) {
                     lineType = "backbone"
                 } else {
                     console.log("unsupported line type")
@@ -554,7 +550,7 @@ export function Topology(props) {
                 links.push(new Link(sourceNode, targetNode, lineType))
             })
             // 构建参数
-            const params= {
+            const params = {
                 network_env: selectedNetworkEnvironment,
                 blockchain_type: selectedBlockchain,
                 consensus_type: selectedConsensusType,
@@ -566,7 +562,7 @@ export function Topology(props) {
                 links: links,
             }
             // 调用函数
-            startTopology(params, (response)=>{
+            startTopology(params, (response) => {
                 message.success({
                     content: `successfully start the topology`
                 })
@@ -574,7 +570,7 @@ export function Topology(props) {
                 setPromptBoxLoading(false) // 关闭 promptbox 的 loading 状态
                 setPromptBoxOpen(false) // 不打开 promptbox
                 window.location.reload() // 进行页面的强制刷新
-            }, (error)=>{
+            }, (error) => {
                 message.error({
                     content: `start topology error ${error}`
                 })
@@ -584,7 +580,7 @@ export function Topology(props) {
             })
         } else if (promptBoxType === promptBoxTypes.stopTopology) { // 如果是停止拓扑的话
             setPromptBoxLoading(true)
-            stopTopology((response)=>{
+            stopTopology((response) => {
                 message.success({
                     content: `成功停止拓扑`
                 })
@@ -592,7 +588,7 @@ export function Topology(props) {
                 setPromptBoxLoading(false) // 关闭 promptbox 的 loading 状态
                 setPromptBoxOpen(false)  // 关闭 promptbox
                 window.location.reload() // 进行页面的强制刷新
-            }, (error)=>{
+            }, (error) => {
                 message.error({
                     content: `stop topology error ${error}`
                 })
@@ -600,7 +596,7 @@ export function Topology(props) {
                 setPromptBoxLoading(false)
                 setPromptBoxOpen(false)
             })
-        } else if (promptBoxType === promptBoxTypes.startAttack){ // 如果是发动攻击的话
+        } else if (promptBoxType === promptBoxTypes.startAttack) { // 如果是发动攻击的话
             setPromptBoxLoading(true)
             let params = {
                 attack_thread_count: selectedAttackThreadCount,
@@ -610,7 +606,7 @@ export function Topology(props) {
                 attack_duration: selectedAttackDuration
             }
             let splitContent = selectedAttackNode.split("_")  // 准备拿到类型和 id
-            startAttackRequest(parseInt(splitContent[1]), params, (response)=>{
+            startAttackRequest(parseInt(splitContent[1]), params, (response) => {
                 message.success({
                     content: `成功发动攻击`
                 })
@@ -618,13 +614,13 @@ export function Topology(props) {
                 setPromptBoxOpen(false)  // 关闭 promptbox
                 // 如果成功的发动了攻击的话，应该需要将攻击状态设置为正在攻击
                 setCurrentAttackState(true)
-                setTimeout(()=>{
+                setTimeout(() => {
                     setCurrentAttackState(false)
                     message.success({
                         content: "攻击完成"
                     })
                 }, selectedAttackDuration * 1000)
-            },(error)=>{
+            }, (error) => {
                 message.error({
                     content: "发动攻击失败"
                 })
@@ -633,8 +629,7 @@ export function Topology(props) {
             })
         } else if (promptBoxType === promptBoxTypes.errorParameters) {
             setPromptBoxOpen(false)
-        }
-        else {
+        } else {
             console.log("unsupported promptBoxType")
         }
     }
@@ -643,19 +638,20 @@ export function Topology(props) {
     function handlePromptCancelCicked() {
         setPromptBoxOpen(false)
     }
+
     // ---------------------------------------------------------------------------------------------
 
     // 9. 拓扑操作
     // ---------------------------------------------------------------------------------------------
     // 9.1 进行节点的添加
-    const AddNodeButtonClicked = ()=>{
+    const AddNodeButtonClicked = () => {
         let middleX = graphDivRef.current.clientWidth / 2
         let middleY = graphDivRef.current.clientHeight / 2
         AddNodeLogic(nodeType, middleX, middleY, false)
     }
 
     // 9.2 进行颜色的定义
-    function ReturnLableColor(currentState){
+    function ReturnLableColor(currentState) {
         if (currentState) {
             return '#4fde07'
         } else {
@@ -664,7 +660,7 @@ export function Topology(props) {
     }
 
     // 9.3 节点添加的逻辑
-    const AddNodeLogic = (nodeType, x, y, currentState) =>{
+    const AddNodeLogic = (nodeType, x, y, currentState) => {
         let successfullyAdd = false
         if (nodeType === "Router") { // 进行路由节点的添加
             setRouters(prevRouters => {
@@ -797,12 +793,11 @@ export function Topology(props) {
                 return [...prevMaliciousNodes, maliciousNodeId]
             })
             successfullyAdd = true
-        }
-        else {
+        } else {
             console.log("unsupported node type")
         }
         if (successfullyAdd) {
-            setTotalNodesCount((prev)=>prev+1)
+            setTotalNodesCount((prev) => prev + 1)
             startTopologyForm.setFieldsValue({
                 "总节点数量": totalNodesCount + 1,
             })
@@ -826,26 +821,28 @@ export function Topology(props) {
         }
 
     }
+
     // ---------------------------------------------------------------------------------------------
 
     // 10. 按钮
     // ---------------------------------------------------------------------------------------------
     // 10.1 进行拓扑的删除
-    function StopTopology(){
+    function StopTopology() {
         setPromptBoxType(promptBoxTypes.stopTopology)
         setPromptBoxOpen(true)
         setPromptBoxTitle("停止拓扑")
         setPromptBoxText("请确认是否停止拓扑!")
     }
+
     // ---------------------------------------------------------------------------------------------
 
     // 11. 处理拓扑启动表单
     // ---------------------------------------------------------------------------------------------
     // 11.1 当验证失败的时候
-    function onValidateStartTopologyFailed(){
+    function onValidateStartTopologyFailed() {
         setPromptBoxOpen(true)
         setPromptBoxTitle("启动拓扑失败")
-        if(totalNodesCount > 0){
+        if (totalNodesCount > 0) {
             setPromptBoxText("请完成参数的选择!")
         } else {
             setPromptBoxText("请至少完成一个拓扑节点的选择!")
@@ -854,7 +851,7 @@ export function Topology(props) {
     }
 
     // 11.2 当启动拓扑的时候
-    function onStartTopologyFinish(){
+    function onStartTopologyFinish() {
         setPromptBoxType(promptBoxTypes.startTopology)
         let tableValues = [
             {
@@ -889,7 +886,7 @@ export function Topology(props) {
             },
             {
                 key: "7",
-                paramsDescription:  consensusThreadCountField[0],
+                paramsDescription: consensusThreadCountField[0],
                 paramsValue: selectedConsensusThreadCount
             }
         ]
@@ -901,42 +898,44 @@ export function Topology(props) {
     }
 
     // 11.3 当拓扑的值改变的时候
-    function onStartTopologyValuesChange(changedValues){
+    function onStartTopologyValuesChange(changedValues) {
         if (networkEnvironmentField[0] in changedValues) {
             setSelectedNetworkEnvironment(changedValues[networkEnvironmentField[0]]);
         }
-        if (blockchainTypeField[0] in changedValues){
+        if (blockchainTypeField[0] in changedValues) {
             setSelectedBlockchain(changedValues[blockchainTypeField[0]]);
         }
-        if (consensusTypeField[0] in changedValues){
+        if (consensusTypeField[0] in changedValues) {
             setSelectedConsensusType(changedValues[consensusTypeField[0]]);
         }
-        if (accessLinkBandwidthField[0] in changedValues){
+        if (accessLinkBandwidthField[0] in changedValues) {
             setSelectedAccessLinkBandwidth(changedValues[accessLinkBandwidthField[0]]);
         }
-        if (consensusNodeCpuField[0] in changedValues){
+        if (consensusNodeCpuField[0] in changedValues) {
             setSelectedConsensusNodeCpuLimit(changedValues[consensusNodeCpuField[0]]);
         }
-        if (consensusNodeMemoryField[0] in changedValues){
+        if (consensusNodeMemoryField[0] in changedValues) {
             setSelectedConsensusNodeMemoryLimit(changedValues[consensusNodeMemoryField[0]]);
         }
         if (consensusThreadCountField[0] in changedValues) {
             setSelectedConsensusThreadCount(changedValues[consensusThreadCountField[0]]);
         }
     }
+
     // ---------------------------------------------------------------------------------------------
 
     // 12. 处理攻击表单
     // ---------------------------------------------------------------------------------------------
     // 12.1 当验证失败的时候
-    function onValidateStartAttackFailed(){
+    function onValidateStartAttackFailed() {
         setPromptBoxOpen(true)
         setPromptBoxTitle("启动攻击失败")
         setPromptBoxText("请完成参数的选择!")
         setPromptBoxType(promptBoxTypes.errorParameters)
     }
+
     // 12.2 当启动攻击的时候
-    function onStartAttackFinish(){
+    function onStartAttackFinish() {
         let tableValues = [
             {
                 key: "1",
@@ -971,8 +970,9 @@ export function Topology(props) {
             <Table dataSource={tableValues} columns={tableColumns}></Table>
         )
     }
+
     // 12.3 当拓扑的值改变的时候
-    function onStartAttackValuesChange(changedValues){
+    function onStartAttackValuesChange(changedValues) {
         if (attackThreadCountField[0] in changedValues) {
             setSelectedAttackThreadCount(changedValues[attackThreadCountField[0]])
         }
@@ -989,18 +989,19 @@ export function Topology(props) {
             setSelectedAttackDuration(changedValues[attackDurationField[0]])
         }
     }
+
     // ---------------------------------------------------------------------------------------------
 
 
     // 11. 保存上传拓扑相关代码
     // ---------------------------------------------------------------------------------------------
     // 11.1 进行拓扑的保存
-    function saveTopology(){
+    function saveTopology() {
         // 进行所有的节点的信息的收集
         let nodesMap = {}
         let nodesList = []
         const graphNodes = graph.getNodes()
-        graphNodes.forEach((graphNode)=>{
+        graphNodes.forEach((graphNode) => {
             let nodeID = graphNode.getID()
             let result = nodeID.split("_")
             let x = graphNode._cfg.model.x
@@ -1012,13 +1013,13 @@ export function Topology(props) {
         // 进行所有的边的信息的收集
         let links = []
         const graphEdges = graph.getEdges()
-        graphEdges.forEach((graphEdge)=>{
+        graphEdges.forEach((graphEdge) => {
             let lineWidth = graphEdge._cfg.originStyle["edge-shape"].lineWidth
             console.log(lineWidth)
             let lineType = ""
             if (lineWidth === 2) {
                 lineType = "access"
-            } else if (lineWidth ===  5) {
+            } else if (lineWidth === 5) {
                 lineType = "backbone"
             } else {
                 console.log("unsupported line type")
@@ -1033,7 +1034,7 @@ export function Topology(props) {
             "nodes": nodesList,
             "links": links,
         }
-        let blob = new Blob([JSON.stringify(data)], { type: "application/json"})
+        let blob = new Blob([JSON.stringify(data)], {type: "application/json"})
         let url = window.URL.createObjectURL(blob)
         let link = document.createElement("a");
         link.style.display = "none";
@@ -1069,37 +1070,37 @@ export function Topology(props) {
     // ---------------------------------------------------------------------------------------------
 
     // 12. 网络环境的变化
-    function onEnvironmentChange(e){
+    function onEnvironmentChange(e) {
         const selectedEnvironment = e.target.value
-        if (selectedEnvironment === "广域网环境"){
-            getWideAreaNetworkTopology((response)=>{
+        if (selectedEnvironment === "广域网环境") {
+            getWideAreaNetworkTopology((response) => {
                 rebuildGraph(response.data, false)
                 message.success({
                     content: "成功切换到广域网环境"
                 })
-            }, (error)=>{
+            }, (error) => {
                 message.error({
-                    content:  "切换到广域网环境失败"
+                    content: "切换到广域网环境失败"
                 })
             })
         } else if (selectedEnvironment === "数据中心环境") {
-            getDataCenterTopology((response)=> {
+            getDataCenterTopology((response) => {
                 rebuildGraph(response.data, false)
                 message.success({
                     content: "成功切换到数据中心环境"
                 })
-            }, (error)=>{
+            }, (error) => {
                 message.error({
                     content: "切换到数据中心环境失败"
                 })
             })
         } else if (selectedEnvironment === "自组网环境") {
-            getManetTopology((response)=>{
+            getManetTopology((response) => {
                 rebuildGraph(response.data, false)
                 message.success({
                     content: "成功切换到自组网环境"
                 })
-            }, (error)=> {
+            }, (error) => {
                 message.error({
                     content: "切换到自组网环境失败"
                 })
@@ -1117,38 +1118,38 @@ export function Topology(props) {
     }
 
     // 13. 开启共识和停止共识
-    function startTxRateTestClicked(){
-        startTxRateTest((response)=>{
+    function startTxRateTestClicked() {
+        startTxRateTest((response) => {
             setTimeList(response.data["time_list"])
             setCurrentTps(response.data["rate_list"])
             message.success({
                 content: "开启共识成功"
             })
-            let txRateTimerTmp = setInterval(()=>{
-                startTxRateTest((response)=>{
+            let txRateTimerTmp = setInterval(() => {
+                startTxRateTest((response) => {
                     setTimeList(response.data["time_list"])
                     setCurrentTps(response.data["rate_list"])
-                }, (error)=>{
+                }, (error) => {
                     message.error("获取共识速率失败")
                 })
             }, 1000)
             setTxRateTimer(txRateTimerTmp)
-        }, (error)=>{
+        }, (error) => {
             message.error({
                 content: "开启共识失败"
             })
         })
     }
 
-    function stopTxRateTestClicked(){
-        stopTxRateTest((response)=>{
-            if(txRateTimer) {
+    function stopTxRateTestClicked() {
+        stopTxRateTest((response) => {
+            if (txRateTimer) {
                 clearInterval(txRateTimer)
             }
             message.success({
                 content: "成功停止共识"
             })
-        },(error)=>{
+        }, (error) => {
             message.error({
                 content: "停止共识失败"
             })
@@ -1165,570 +1166,522 @@ export function Topology(props) {
             </Row>
             <Row>
                 <Col span={13}>
-                    {/*第2行*/}
-                    <Row style={{marginLeft: "1vw", marginRight:"1vw"}}>
-                        <Divider
-                            style={{
-                                borderColor: '#7cb305',
-                            }}
-                        >
-                            {firstSplitContent}
-                        </Divider>
-                    </Row>
-                    {/*第3行*/}
-                    <Row style={{marginLeft: "1vw", marginRight:"1vw"}}>
-                        <Col span={2}>
+                    <Card
+                        size={"small"}
+                        title={"拓扑配置"}
+                        style={{marginLeft: "1vw", marginRight: "1vw"}}
+                    >
+                        <Row style={{marginLeft: "1vw", marginRight: "1vw"}}>
+                            <Col span={5} style={{textAlign: "center"}}>
+                                <Select
+                                    defaultValue="Router"
+                                    style={{width: "80%"}}
+                                    onChange={(value) => {
+                                        setNodeType(value)
+                                    }}
+                                    options={nodeTypes.map((nodeType) => ({
+                                        label: nodeType,
+                                        value: nodeType,
+                                    }))}
+                                />
+                            </Col>
+                            <Col span={5} style={{textAlign: "center"}}>
+                                <Button
+                                    type={"primary"}
+                                    style={{width: "80%"}}
+                                    disabled={currentTopologyState}
+                                    onClick={AddNodeButtonClicked}>
+                                    添加节点
+                                </Button>
+                            </Col>
+                            <Col span={5} style={{textAlign: "center"}}>
+                                <Select
+                                    defaultValue={"接入链路"}
+                                    style={{width: "80%"}}
+                                    options={linkTypes.map((linkType) => ({
+                                        label: linkType,
+                                        value: linkType,
+                                    }))}
+                                    onChange={(value) => {
+                                        if (value === "接入链路") {
+                                            console.log(graph.get("defaultEdge"))
+                                            graph.get("defaultEdge").style = styleForAccessLink
+                                        } else if (value === "骨干链路") {
+                                            console.log(graph.get("defaultEdge"))
+                                            graph.get("defaultEdge").style = styleForBackboneLink
+                                        } else {
+                                            console.log("unsupported link type")
+                                        }
+                                    }}
+                                >
+                                </Select>
+                            </Col>
+                            <Col span={5}>
+                                <Button
+                                    type={"primary"}
+                                    style={{width: "80%"}}
+                                    onClick={saveTopology}>
+                                    保存拓扑
+                                </Button>
+                            </Col>
+                            <Col span={4}>
+                                <Upload {...uploadProps}>
+                                    <Button style={{width: "100%"}} icon={<UploadOutlined/>}>上传拓扑</Button>
+                                </Upload>
+                            </Col>
+                        </Row>
+                    </Card>
 
-                        </Col>
-                        <Col span={4} style={{textAlign: "center"}}>
-                            <Select
-                                defaultValue="Router"
-                                style={{width: "80%"}}
-                                onChange={(value)=>{
-                                    setNodeType(value)
-                                }}
-                                options={nodeTypes.map((nodeType) => ({
-                                    label: nodeType,
-                                    value: nodeType,
-                                }))}
-                            />
-                        </Col>
-                        <Col span={4} style={{textAlign: "center"}}>
-                            <Button
-                                type={"primary"}
-                                style={{width: "80%"}}
-                                disabled={currentTopologyState}
-                                onClick={AddNodeButtonClicked}>
-                                添加节点
-                            </Button>
-                        </Col>
-                        <Col span={4} style={{textAlign: "center"}}>
-                            <Select
-                                defaultValue={"接入链路"}
-                                style={{width: "80%"}}
-                                options={linkTypes.map((linkType) => ({
-                                    label: linkType,
-                                    value: linkType,
-                                }))}
-                                onChange={(value)=>{
-                                    if(value === "接入链路") {
-                                        console.log(graph.get("defaultEdge"))
-                                        graph.get("defaultEdge").style = styleForAccessLink
-                                    } else if (value === "骨干链路") {
-                                        console.log(graph.get("defaultEdge"))
-                                        graph.get("defaultEdge").style = styleForBackboneLink
-                                    } else {
-                                        console.log("unsupported link type")
-                                    }
-                                }}
-                            >
-                            </Select>
-                        </Col>
-                        <Col span={4}>
-                            <Button
-                                type={"primary"}
-                                style={{width: "80%"}}
-                                onClick={saveTopology}>
-                                保存拓扑
-                            </Button>
-                        </Col>
-                        <Col span={4}>
-                            <Upload {...uploadProps}>
-                                <Button icon={<UploadOutlined />}>上传拓扑</Button>
-                            </Upload>
-                        </Col>
-                        <Col span={2}>
 
-                        </Col>
+                    <Row style={{height: "2vh"}}>
+
                     </Row>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                    <Row style={{marginLeft: "1vw", marginRight:"1vw"}}>
-                        <Col span={13}>
-                            <Divider
-                                style={{
-                                    borderColor: '#7cb305',
-                                }}
+                    <Row style={{marginLeft: "1vw", marginRight: "1vw"}}>
+                        <Col span={12}>
+                            <Card
+                                size={"small"}
+                                title={"区块链系统配置"}
                             >
-                                {secondSplitContent}
-                            </Divider>
-                            {/*注意 Form 是可以当成一行的*/}
-                            <Form
-                                form={startTopologyForm}
-                                name={"topology start form"}
-                                onFinishFailed={onValidateStartTopologyFailed}
-                                onFinish={onStartTopologyFinish}
-                                onValuesChange={onStartTopologyValuesChange}
-                                labelCol={{
-                                    span: 12,
-                                }}
-                                wrapperCol={{
-                                    span: 12,
-                                }}
-                                initialValues={{
-                                    [networkEnvironmentField[0]]: selectedNetworkEnvironment,
-                                    [blockchainTypeField[0]]: selectedBlockchain,
-                                    [consensusTypeField[0]]: selectedConsensusType,
-                                    [accessLinkBandwidthField[0]]: selectedAccessLinkBandwidth,
-                                    [consensusNodeCpuField[0]]: selectedConsensusNodeCpuLimit,
-                                    [consensusNodeMemoryField[0]]: selectedConsensusNodeMemoryLimit,
-                                    [consensusThreadCountField[0]]: selectedConsensusThreadCount,
-                                    [totalNodesCountField[0]]: totalNodesCount,
-                                }}
-                            >
-                                <Row>
-                                    <Col span={24}>
-                                        <Form.Item
-                                            label={networkEnvironmentField[0]}
-                                            name={networkEnvironmentField[0]}
-                                            rules={[
-                                                {
-                                                    required: true,
-                                                    message: "请选择网络环境"
-                                                }
-                                            ]}
-                                            labelCol={{
-                                                span: 6,
-                                            }}
-                                            wrapperCol={{
-                                                span: 18,
-                                            }}
-                                        >
-                                            <Radio.Group
-                                                disabled={currentTopologyState}
-                                                onChange={onEnvironmentChange}
-                                                value={selectedNetworkEnvironment} style={{width: "100%"}}>
-                                                <Radio value={"广域网环境"}>广域网环境</Radio>
-                                                <Radio value={"数据中心环境"}>数据中心环境</Radio>
-                                                <Radio value={"自组网环境"}>自组网环境</Radio>
-                                                <Radio value={"自定义环境"}>自定义环境</Radio>
-                                            </Radio.Group>
-                                        </Form.Item>
-                                    </Col>
-                                </Row>
-                                <Row>
-                                    <Col span={12}>
-                                        <Form.Item
-                                            label={blockchainTypeField[0]}
-                                            name={blockchainTypeField[0]}
-                                            rules={[
-                                                {
-                                                    required: true,
-                                                    message: "请选择区块链"
-                                                }
-                                            ]}
-                                        >
-                                            <Select
-                                                disabled={currentTopologyState}
-                                                value={selectedBlockchain}
-                                                onChange={(value)=>{
-                                                    setSelectedBlockchain(value)
-                                                    setAvailableConsensusTypes(consensusTypes[value])
-                                                    startTopologyForm.setFieldsValue({
-                                                        "共识类型": consensusTypes[value][0]
-                                                    })
-                                                }}
-                                                options={blockchainTypes.map((blockchainType) => ({
-                                                    label: blockchainType,
-                                                    value: blockchainType,
-                                                }))}
-                                                style={{width: "100%"}}
-                                            />
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={12}>
-                                        <Form.Item
-                                            label={consensusTypeField[0]}
-                                            name={consensusTypeField[0]}
-                                            rules={[
-                                                {
-                                                    required: true,
-                                                    message: "请选择共识协议"
-                                                }
-                                            ]}
-                                        >
-                                            <Select
-                                                disabled={currentTopologyState}
-                                                value={selectedConsensusType}
-                                                onChange={(value)=>{
-                                                    setSelectedConsensusType(value)
-                                                }}
-                                                options={availableConsensusTypes.map((city) => ({
-                                                    label: city,
-                                                    value: city,
-                                                }))}
-                                            />
-                                        </Form.Item>
-                                    </Col>
-                                </Row>
-                                <Row>
-                                    <Col span={12}>
-                                        <Form.Item
-                                            label={accessLinkBandwidthField[0]}
-                                            name={accessLinkBandwidthField[0]}
-                                            rules={[
-                                                {
-                                                    required: true,
-                                                    message: "请选择接入链路带宽"
-                                                }
-                                            ]}
-                                        >
-                                            <InputNumber
-                                                disabled={currentTopologyState}
-                                                placeholder={`${selectedAccessLinkBandwidth}`}
-                                                min={0} style={{width: "100%"}}
-                                                changeOnWheel>
-                                            </InputNumber>
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={12}>
-                                        <Form.Item
-                                            label={consensusNodeCpuField[0]}
-                                            name={consensusNodeCpuField[0]}
-                                            rules={[
-                                                {
-                                                    required: true,
-                                                    message: "请选择共识节点CPU数量限制"
-                                                }
-                                            ]}
-                                        >
-                                            <InputNumber
-                                                disabled={currentTopologyState}
-                                                placeholder={`${selectedConsensusNodeCpuLimit}`}
-                                                min={0} style={{width: "100%"}}
-                                                changeOnWheel>
-                                            </InputNumber>
-                                        </Form.Item>
-                                    </Col>
-                                </Row>
-                                <Row>
-                                    <Col span={12}>
-                                        <Form.Item
-                                            label={consensusNodeMemoryField[0]}
-                                            name={consensusNodeMemoryField[0]}
-                                            rules={[
-                                                {
-                                                    required: true,
-                                                    message: "请选择共识节点内存限制"
-                                                }
-                                            ]}
-                                        >
-                                            <InputNumber
-                                                disabled={currentTopologyState}
-                                                placeholder={`${selectedConsensusNodeMemoryLimit}`}
-                                                min={0} style={{width: "100%"}}
-                                                changeOnWheel>
-                                            </InputNumber>
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={12}>
-                                        <Form.Item
-                                            label={consensusThreadCountField[0]}
-                                            name={consensusThreadCountField[0]}
-                                            rules={[
-                                                {
-                                                    required: true,
-                                                    message: "请选择共识节点内存限制"
-                                                }
-                                            ]}
-                                        >
-                                            <InputNumber
-                                                disabled={currentTopologyState}
-                                                placeholder={`${selectedConsensusThreadCount}`}
-                                                min={0} style={{width: "100%"}}
-                                                changeOnWheel>
-                                            </InputNumber>
-                                        </Form.Item>
-                                    </Col>
-                                </Row>
-                                <Row style={{display: "none"}}>
-                                    <Form.Item
-                                        label={totalNodesCountField[0]}
-                                        name={totalNodesCountField[0]}
-                                        rules={[
-                                            {
-                                                validator: (rule, value, callback) => {
-                                                    if (value === 0) {
-                                                        return Promise.reject("拓扑至少存在一个节点");
+                                {/*注意 Form 是可以当成一行的*/}
+                                <Form
+                                    form={startTopologyForm}
+                                    name={"topology start form"}
+                                    onFinishFailed={onValidateStartTopologyFailed}
+                                    onFinish={onStartTopologyFinish}
+                                    onValuesChange={onStartTopologyValuesChange}
+                                    labelCol={{
+                                        span: 16,
+                                    }}
+                                    wrapperCol={{
+                                        span: 8,
+                                    }}
+                                    initialValues={{
+                                        [networkEnvironmentField[0]]: selectedNetworkEnvironment,
+                                        [blockchainTypeField[0]]: selectedBlockchain,
+                                        [consensusTypeField[0]]: selectedConsensusType,
+                                        [accessLinkBandwidthField[0]]: selectedAccessLinkBandwidth,
+                                        [consensusNodeCpuField[0]]: selectedConsensusNodeCpuLimit,
+                                        [consensusNodeMemoryField[0]]: selectedConsensusNodeMemoryLimit,
+                                        [consensusThreadCountField[0]]: selectedConsensusThreadCount,
+                                        [totalNodesCountField[0]]: totalNodesCount,
+                                    }}
+                                >
+                                    <Row>
+                                        <Col span={24}>
+                                            <Form.Item
+                                                label={networkEnvironmentField[0]}
+                                                name={networkEnvironmentField[0]}
+                                                rules={[
+                                                    {
+                                                        required: true,
+                                                        message: "请选择网络环境"
                                                     }
-                                                    else {
-                                                        return Promise.resolve()
+                                                ]}
+                                                labelCol={{
+                                                    span: 8,
+                                                }}
+                                                wrapperCol={{
+                                                    span: 16,
+                                                }}
+                                            >
+                                                <Radio.Group
+                                                    disabled={currentTopologyState}
+                                                    onChange={onEnvironmentChange}
+                                                    value={selectedNetworkEnvironment} style={{width: "100%"}}>
+                                                    <Radio value={"广域网环境"}>广域网环境</Radio>
+                                                    <Radio value={"数据中心环境"}>数据中心环境</Radio>
+                                                    <Radio value={"自组网环境"}>自组网环境</Radio>
+                                                    <Radio value={"自定义环境"}>自定义环境</Radio>
+                                                </Radio.Group>
+                                            </Form.Item>
+                                        </Col>
+                                    </Row>
+                                    <Row>
+                                        <Col span={12}>
+                                            <Form.Item
+                                                label={blockchainTypeField[0]}
+                                                name={blockchainTypeField[0]}
+                                                rules={[
+                                                    {
+                                                        required: true,
+                                                        message: "请选择区块链"
                                                     }
+                                                ]}
+                                            >
+                                                <Select
+                                                    disabled={currentTopologyState}
+                                                    value={selectedBlockchain}
+                                                    onChange={(value) => {
+                                                        setSelectedBlockchain(value)
+                                                        setAvailableConsensusTypes(consensusTypes[value])
+                                                        startTopologyForm.setFieldsValue({
+                                                            "共识类型": consensusTypes[value][0]
+                                                        })
+                                                    }}
+                                                    options={blockchainTypes.map((blockchainType) => ({
+                                                        label: blockchainType,
+                                                        value: blockchainType,
+                                                    }))}
+                                                    style={{width: "100%"}}
+                                                />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={12}>
+                                            <Form.Item
+                                                label={consensusTypeField[0]}
+                                                name={consensusTypeField[0]}
+                                                rules={[
+                                                    {
+                                                        required: true,
+                                                        message: "请选择共识协议"
+                                                    }
+                                                ]}
+                                            >
+                                                <Select
+                                                    disabled={currentTopologyState}
+                                                    value={selectedConsensusType}
+                                                    onChange={(value) => {
+                                                        setSelectedConsensusType(value)
+                                                    }}
+                                                    options={availableConsensusTypes.map((city) => ({
+                                                        label: city,
+                                                        value: city,
+                                                    }))}
+                                                />
+                                            </Form.Item>
+                                        </Col>
+                                    </Row>
+                                    <Row>
+                                        <Col span={12}>
+                                            <Form.Item
+                                                label={accessLinkBandwidthField[1]}
+                                                name={accessLinkBandwidthField[0]}
+                                                rules={[
+                                                    {
+                                                        required: true,
+                                                        message: "请选择接入链路带宽"
+                                                    }
+                                                ]}
+                                            >
+                                                <InputNumber
+                                                    disabled={currentTopologyState}
+                                                    placeholder={`${selectedAccessLinkBandwidth}`}
+                                                    min={0} style={{width: "100%"}}
+                                                    changeOnWheel>
+                                                </InputNumber>
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={12}>
+                                            <Form.Item
+                                                label={consensusNodeCpuField[1]}
+                                                name={consensusNodeCpuField[0]}
+                                                rules={[
+                                                    {
+                                                        required: true,
+                                                        message: "请选择共识节点CPU数量限制"
+                                                    }
+                                                ]}
+                                            >
+                                                <InputNumber
+                                                    disabled={currentTopologyState}
+                                                    placeholder={`${selectedConsensusNodeCpuLimit}`}
+                                                    min={0} style={{width: "100%"}}
+                                                    changeOnWheel>
+                                                </InputNumber>
+                                            </Form.Item>
+                                        </Col>
+                                    </Row>
+                                    <Row>
+                                        <Col span={12}>
+                                            <Form.Item
+                                                label={consensusNodeMemoryField[1]}
+                                                name={consensusNodeMemoryField[0]}
+                                                rules={[
+                                                    {
+                                                        required: true,
+                                                        message: "请选择共识节点内存限制"
+                                                    }
+                                                ]}
+                                            >
+                                                <InputNumber
+                                                    disabled={currentTopologyState}
+                                                    placeholder={`${selectedConsensusNodeMemoryLimit}`}
+                                                    min={0} style={{width: "100%"}}
+                                                    changeOnWheel>
+                                                </InputNumber>
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={12}>
+                                            <Form.Item
+                                                label={consensusThreadCountField[0]}
+                                                name={consensusThreadCountField[0]}
+                                                rules={[
+                                                    {
+                                                        required: true,
+                                                        message: "请选择共识节点内存限制"
+                                                    }
+                                                ]}
+                                            >
+                                                <InputNumber
+                                                    disabled={currentTopologyState}
+                                                    placeholder={`${selectedConsensusThreadCount}`}
+                                                    min={0} style={{width: "100%"}}
+                                                    changeOnWheel>
+                                                </InputNumber>
+                                            </Form.Item>
+                                        </Col>
+                                    </Row>
+                                    <Row style={{display: "none"}}>
+                                        <Form.Item
+                                            label={totalNodesCountField[0]}
+                                            name={totalNodesCountField[0]}
+                                            rules={[
+                                                {
+                                                    validator: (rule, value, callback) => {
+                                                        if (value === 0) {
+                                                            return Promise.reject("拓扑至少存在一个节点");
+                                                        } else {
+                                                            return Promise.resolve()
+                                                        }
+                                                    },
                                                 },
-                                            },
-                                        ]}
-                                    >
-                                        <InputNumber></InputNumber>
-                                    </Form.Item>
-                                </Row>
-                                <Row>
-                                    <Col span={11}  style={{textAlign: "center"}}>
-                                        <Button
-                                            type={"primary"}
-                                            style={{width: "100%", backgroundColor:'#28c016'}}
-                                            disabled={currentTopologyState}
-                                            htmlType={"submit"}>
-                                            启动拓扑
-                                        </Button>
-                                    </Col>
-                                    <Col span={2}></Col>
-                                    <Col span={11} style={{textAlign: "center"}}>
-                                        <Button
-                                            type={"primary"}
-                                            danger
-                                            style={{width: "100%"}}
-                                            disabled={!currentTopologyState}
-                                            onClick={StopTopology}>
-                                            停止拓扑
-                                        </Button>
-                                    </Col>
-                                </Row>
-                            </Form>
+                                            ]}
+                                        >
+                                            <InputNumber></InputNumber>
+                                        </Form.Item>
+                                    </Row>
+                                    <Row>
+                                        <Col span={11} style={{textAlign: "center"}}>
+                                            <Button
+                                                type={"primary"}
+                                                style={{width: "100%", backgroundColor: '#28c016'}}
+                                                disabled={currentTopologyState}
+                                                htmlType={"submit"}>
+                                                启动拓扑
+                                            </Button>
+                                        </Col>
+                                        <Col span={2}></Col>
+                                        <Col span={11} style={{textAlign: "center"}}>
+                                            <Button
+                                                type={"primary"}
+                                                danger
+                                                style={{width: "100%"}}
+                                                disabled={!currentTopologyState}
+                                                onClick={StopTopology}>
+                                                停止拓扑
+                                            </Button>
+                                        </Col>
+                                    </Row>
+                                </Form>
+                            </Card>
                         </Col>
 
                         <Col span={1}></Col>
 
 
-                        <Col span={10}>
-                            <Row>
-                                <Divider
-                                    style={{
-                                        borderColor: '#7cb305',
+                        <Col span={11}>
+                            <Card
+                                size={"small"}
+                                title={"攻击配置"}
+                            >
+                                <Form
+                                    name={"attack start form"}
+                                    onFinishFailed={onValidateStartAttackFailed}
+                                    onFinish={onStartAttackFinish}
+                                    onValuesChange={onStartAttackValuesChange}
+                                    labelCol={{
+                                        span: 12,
+                                    }}
+                                    wrapperCol={{
+                                        span: 12,
+                                    }}
+                                    initialValues={{
+                                        [attackThreadCountField[0]]: selectedAttackThreadCount,
+                                        [attackTypeField[0]]: selectedAttackType,
+                                        [attackDurationField[0]]: selectedAttackDuration,
                                     }}
                                 >
-                                    {attackSplitContent}
-                                </Divider>
-                            </Row>
-                            <Form
-                                name={"attack start form"}
-                                onFinishFailed={onValidateStartAttackFailed}
-                                onFinish={onStartAttackFinish}
-                                onValuesChange={onStartAttackValuesChange}
-                                labelCol={{
-                                    span: 12,
-                                }}
-                                wrapperCol={{
-                                    span: 12,
-                                }}
-                                initialValues= {{
-                                    [attackThreadCountField[0]]: selectedAttackThreadCount,
-                                    [attackTypeField[0]]: selectedAttackType,
-                                    [attackDurationField[0]]: selectedAttackDuration,
-                                }}
+                                    <Row>
+                                        <Col span={12}>
+                                            <Form.Item
+                                                label={attackThreadCountField[0]}
+                                                name={attackThreadCountField[0]}
+                                                rules={[
+                                                    {
+                                                        required: true,
+                                                        message: "请选择攻击线程数量"
+                                                    }
+                                                ]}
+                                            >
+                                                <InputNumber
+                                                    disabled={currentAttackState}
+                                                    placeholder={`${selectedAttackThreadCount}`}
+                                                    style={{width: "100%"}}
+                                                    changeOnWheel>
+                                                </InputNumber>
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={12}>
+                                            <Form.Item
+                                                label={attackTypeField[0]}
+                                                name={attackTypeField[0]}
+                                                rules={[
+                                                    {
+                                                        required: true,
+                                                        message: "请选择攻击的类型"
+                                                    }
+                                                ]}
+                                            >
+                                                <Select
+                                                    value={selectedAttackType}
+                                                    disabled={currentAttackState}
+                                                    onChange={(value) => {
+                                                        setSelectedAttackType(value)
+                                                    }}
+                                                    options={attackTypes.map((attackType) => ({
+                                                        label: attackType,
+                                                        value: attackType,
+                                                    }))}
+                                                ></Select>
+                                            </Form.Item>
+                                        </Col>
+                                    </Row>
+                                    <Row>
+                                        <Col span={12}>
+                                            <Form.Item
+                                                label={attackNodeField[0]}
+                                                name={attackNodeField[0]}
+                                                rules={[
+                                                    {
+                                                        required: true,
+                                                        message: "请选择攻击节点"
+                                                    }
+                                                ]}
+                                            >
+                                                <Select value={selectedAttackNode}
+                                                        disabled={currentAttackState}
+                                                        onChange={(value) => {
+                                                            setSelectedAttackNode(value)
+                                                        }}
+                                                        options={maliciousNodes.map((maliciousNode) => ({
+                                                            label: maliciousNode,
+                                                            value: maliciousNode,
+                                                        }))}
+                                                >
+
+                                                </Select>
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={12}>
+                                            <Form.Item
+                                                label={attackedNodeField[0]}
+                                                name={attackedNodeField[0]}
+                                                rules={[
+                                                    {
+                                                        required: true,
+                                                        message: "请选择被攻击节点"
+                                                    }
+                                                ]}
+                                            >
+                                                <Select value={selectedAttackedNode}
+                                                        onChange={(value) => {
+                                                            setSelectedAttackedNode(value)
+                                                        }}
+                                                        disabled={currentAttackState}
+                                                        options={chainMakerNodes.map((chainMakerNode) => ({
+                                                            label: chainMakerNode,
+                                                            value: chainMakerNode,
+                                                        }))}
+                                                >
+                                                </Select>
+                                            </Form.Item>
+                                        </Col>
+                                    </Row>
+                                    <Row>
+                                        <Col span={12}>
+                                            <Form.Item
+                                                label={attackDurationField[0]}
+                                                name={attackDurationField[0]}
+                                                rules={[
+                                                    {
+                                                        required: true,
+                                                        message: "请选择攻击时长"
+                                                    }
+                                                ]}
+                                            >
+                                                <InputNumber
+                                                    disabled={currentAttackState}
+                                                    placeholder={`${selectedAttackDuration}`}
+                                                    style={{width: "100%"}}
+                                                    changeOnWheel>
+                                                </InputNumber>
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={1}></Col>
+                                        <Col span={11} style={{textAlign: "center"}}>
+                                            <Button
+                                                type={"primary"}
+                                                style={{width: "100%"}}
+                                                htmlType={"submit"}
+                                                danger
+                                                disabled={currentAttackState}>
+                                                开始攻击
+                                            </Button>
+                                        </Col>
+                                    </Row>
+                                </Form>
+                            </Card>
+                            <Row style={{height: "0.6vh"}}></Row>
+                            <Card
+                                size={"small"}
+                                title={"共识配置"}
                             >
                                 <Row>
-                                    <Col span={12}>
-                                        <Form.Item
-                                            label={attackThreadCountField[0]}
-                                            name={attackThreadCountField[0]}
-                                            rules={[
-                                                {
-                                                    required: true,
-                                                    message: "请选择攻击线程数量"
-                                                }
-                                            ]}
-                                        >
-                                            <InputNumber
-                                                disabled={currentAttackState}
-                                                placeholder={`${selectedAttackThreadCount}`}
-                                                style={{width: "100%"}}
-                                                changeOnWheel>
-                                            </InputNumber>
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={12}>
-                                        <Form.Item
-                                            label={attackTypeField[0]}
-                                            name={attackTypeField[0]}
-                                            rules={[
-                                                {
-                                                    required: true,
-                                                    message: "请选择攻击的类型"
-                                                }
-                                            ]}
-                                        >
-                                            <Select
-                                                value={selectedAttackType}
-                                                disabled={currentAttackState}
-                                                onChange={(value)=>{
-                                                    setSelectedAttackType(value)
-                                                }}
-                                                options={attackTypes.map((attackType) => ({
-                                                    label: attackType,
-                                                    value: attackType,
-                                                }))}
-                                            ></Select>
-                                        </Form.Item>
-                                    </Col>
-                                </Row>
-                                <Row>
-                                    <Col span={12}>
-                                        <Form.Item
-                                            label={attackNodeField[0]}
-                                            name={attackNodeField[0]}
-                                            rules={[
-                                                {
-                                                    required: true,
-                                                    message: "请选择攻击节点"
-                                                }
-                                            ]}
-                                        >
-                                            <Select value={selectedAttackNode}
-                                                    disabled={currentAttackState}
-                                                    onChange = {(value)=>{
-                                                        setSelectedAttackNode(value)
-                                                    }}
-                                                    options={maliciousNodes.map((maliciousNode) => ({
-                                                        label: maliciousNode,
-                                                        value: maliciousNode,
-                                                    }))}
-                                            >
-
-                                            </Select>
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={12}>
-                                        <Form.Item
-                                            label={attackedNodeField[0]}
-                                            name={attackedNodeField[0]}
-                                            rules={[
-                                                {
-                                                    required: true,
-                                                    message: "请选择被攻击节点"
-                                                }
-                                            ]}
-                                        >
-                                            <Select value={selectedAttackedNode}
-                                                    onChange = {(value)=>{
-                                                        setSelectedAttackedNode(value)
-                                                    }}
-                                                    disabled={currentAttackState}
-                                                    options={chainMakerNodes.map((chainMakerNode) => ({
-                                                        label: chainMakerNode,
-                                                        value: chainMakerNode,
-                                                    }))}
-                                            >
-                                            </Select>
-                                        </Form.Item>
-                                    </Col>
-                                </Row>
-                                <Row>
-                                    <Col span={12}>
-                                        <Form.Item
-                                            label={attackDurationField[0]}
-                                            name={attackDurationField[0]}
-                                            rules={[
-                                                {
-                                                    required: true,
-                                                    message: "请选择攻击时长"
-                                                }
-                                            ]}
-                                        >
-                                            <InputNumber
-                                                disabled={currentAttackState}
-                                                placeholder={`${selectedAttackDuration}`}
-                                                style={{width: "100%"}}
-                                                changeOnWheel>
-                                            </InputNumber>
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={1}></Col>
                                     <Col span={11} style={{textAlign: "center"}}>
                                         <Button
                                             type={"primary"}
                                             style={{width: "100%"}}
+                                            onClick={startTxRateTestClicked}>
+                                            开始共识
+                                        </Button>
+                                    </Col>
+                                    <Col span={2}></Col>
+                                    <Col span={11}>
+                                        <Button
+                                            type={"primary"}
+                                            style={{width: "100%"}}
                                             htmlType={"submit"}
-                                            danger
-                                            disabled={currentAttackState}>
-                                            开始攻击
+                                            onClick={stopTxRateTestClicked}
+                                            danger>
+                                            停止共识
                                         </Button>
                                     </Col>
                                 </Row>
-                            </Form>
-                            <Row style={{height: "1.3vh"}}></Row>
-                            <Row>
-                                <Divider
-                                    style={{
-                                        borderColor: '#7cb305',
-                                    }}
-                                >
-                                    {consensusSplitContent}
-                                </Divider>
-                            </Row>
-                            <Row>
-                                <Col span={11} style={{textAlign: "center"}}>
-                                    <Button
-                                        type={"primary"}
-                                        style={{width: "100%"}}
-                                        onClick={startTxRateTestClicked}>
-                                        开始共识
-                                    </Button>
-                                </Col>
-                                <Col span={2}></Col>
-                                <Col span={11}>
-                                    <Button
-                                        type={"primary"}
-                                        style={{width: "100%"}}
-                                        htmlType={"submit"}
-                                        onClick={stopTxRateTestClicked}
-                                        danger>
-                                        停止共识
-                                    </Button>
-                                </Col>
-                            </Row>
+                            </Card>
                         </Col>
                     </Row>
-                    <Row style={{marginLeft: "1vw", marginRight:"1vw"}}>
-                        <ReactECharts
-                            option={rateOption}
-                            style={{height: "30vh", width: "100%"}}
-                        >
-
-                        </ReactECharts>
+                    <Row style={{height: "1vh"}}></Row>
+                    <Row style={{marginLeft: "1vw", marginRight: "1vw"}}>
+                        <Col span={24}>
+                            <Card
+                                size={"small"}
+                            >
+                                <ReactECharts
+                                    option={rateOption}
+                                    style={{height: "30vh", width: "100%"}}
+                                >
+                                </ReactECharts>
+                            </Card>
+                        </Col>
                     </Row>
                 </Col>
 
 
-
-
-
-
-
-
-
-
                 <Col span={11}>
-                    <Row style={{marginLeft: "1vw", marginRight:"1vw"}}>
-                        <Divider
-                            style={{
-                                borderColor: '#7cb305',
-                            }}
-                        >
-                            {topologySplitContent}
-                        </Divider>
-                    </Row>
-                    {/*第5行*/}
-                    <Row style={{marginLeft: "1vw", marginRight:"1vw"}}>
-                        <div ref={graphDivRef} id="graph" style={{backgroundColor: "grey", width: "100%", height: "66.3vh"}}>
+                    <Row style={{marginLeft: "1vw", marginRight: "1vw"}}>
+                        <div ref={graphDivRef} id="graph"
+                             style={{backgroundColor: "grey", width: "100%", height: "87.5vh"}}>
                         </div>
                     </Row>
                 </Col>

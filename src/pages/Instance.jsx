@@ -15,6 +15,7 @@ export function Instance(props) {
     const [timeList, setTimeList] = useState([])
     const [interfaceRateList, setInterfaceRateList] = useState([])
     const [cpuRatioList, setCpuRatioList] = useState([])
+    const [memoryList, setMemoryList] = useState([])
 
     // 3. 上来就加载一个默认的界面
     useEffect(() => {
@@ -50,6 +51,7 @@ export function Instance(props) {
             setTimeList(response.data["time_list"])
             setInterfaceRateList(response.data["interface_rate_list"])
             setCpuRatioList(response.data["cpu_ratio_list"])
+            setMemoryList(response.data["memory_list"])
         }, (error)=>{
             message.error({
                 content: "监听失败"
@@ -70,23 +72,30 @@ export function Instance(props) {
         const containerTypeAndId = containerName.split("_")
         const realContainerName = containerTypeAndId[0] + "-" + containerTypeAndId[1]
         let params = {
-            "container_name":realContainerName
+            "container_name": realContainerName
         }
         startWebShell(params, (response)=>{
             const webShellInfo = response.data
-            let largestKey = undefined
+            let largestKey = -1
             if (tabs.length === 0){
                 largestKey = 0
             } else {
-                largestKey = parseInt(tabs[tabs.length-1].key.split("-")[1])
+                // 遍历所有的 tabs 从而找到最大的 key
+                for (let index = 0; index < tabs.length; index++) {
+                    let splitContent  = tabs[index].key.split(":")
+                    let tmpKey = parseInt(splitContent[1])
+                    if (largestKey < tmpKey + 1) {
+                        largestKey = tmpKey + 1
+                    }
+                }
             }
-            const newKey = `${realContainerName}-${largestKey + 1}`
+            const newKey = `${realContainerName}:${largestKey}`
             const url = `http://${webShellInfo.address}:${webShellInfo.port}`
             setTabs([...tabs, {
                 key: newKey,
                 label: newKey,
                 children: <Row justify="center">
-                    <iframe style={{width:"80vw",height:"25vw"}} src={url}/>
+                    <iframe style={{width:"100%",height:"40vh"}} src={url}/>
                 </Row>,
                 pid: webShellInfo.pid
             }])
@@ -129,7 +138,7 @@ export function Instance(props) {
     // 8. option for rate
     const interfaceRateOption = {
         title: {
-            text: '节点被攻击速率'
+            text: ''
         },
         grid: {
             left: "80px",
@@ -156,7 +165,7 @@ export function Instance(props) {
             }
         },
         yAxis: {
-            name: "被攻击速率",
+            name: "节点被攻击速率",
             type: "value",
             axisLabel: {
                 formatter: '{value}',
@@ -167,7 +176,7 @@ export function Instance(props) {
             }
         },
         series: [{
-            name: '被攻击速率',
+            name: '节点被攻击速率',
             type:'line',
             yAxisIndex: 0,
             data: interfaceRateList,
@@ -181,9 +190,63 @@ export function Instance(props) {
         }]
     }
 
+    const memoryOption = {
+        title: {
+            text: ''
+        },
+        grid: {
+            left: "80px",
+            right: "80px"
+        },
+        tooltip: {
+            trigger: "axis"
+        },
+        legend: {
+            data:['节点内存'],
+            textStyle: {
+                fontSize: 15, // 图例字体大小
+            }
+        },
+        xAxis: {
+            name: "时间/S",
+            type: "category",
+            data: timeList,
+            axisLabel: {
+                fontSize: 15
+            },
+            nameTextStyle: {
+                fontSize: 20
+            }
+        },
+        yAxis: {
+            name: "节点内存",
+            type: "value",
+            axisLabel: {
+                formatter: '{value} MB',
+                fontSize: 15
+            },
+            nameTextStyle: {
+                fontSize: 20
+            }
+        },
+        series: [{
+            name: '节点内存',
+            type:'line',
+            yAxisIndex: 0,
+            data: memoryList,
+            lineStyle: {
+                width: 4,
+                color: "rgb(222,7,7)",
+            },
+            smooth: false,
+            symbolSize: 15,
+            color: "rgb(222,7,7)",
+        }]
+    }
+
     const cpuRateOption = {
         title: {
-            text: "节点 CPU 利用率",
+            text: "",
         },
         grid: {
             left: "80px",
@@ -239,21 +302,37 @@ export function Instance(props) {
     return (
         <div>
             <Row justify={"center"}>
-                <Col span={12}>
-                    <Card>
+                <Col span={8}>
+                    <Card
+                        size={"small"}
+                    >
                         <ReactECharts
                             option={interfaceRateOption}
-                            style={{height: "30vh", width: "40vw"}}
+                            style={{height: "30vh", width: "100%"}}
                         >
 
                         </ReactECharts>
                     </Card>
                 </Col>
-                <Col span={12}>
-                    <Card>
+                <Col span={8}>
+                    <Card
+                        size={"small"}
+                    >
+                        <ReactECharts
+                            option={memoryOption}
+                            style={{height: "30vh", width: "100%"}}
+                        >
+
+                        </ReactECharts>
+                    </Card>
+                </Col>
+                <Col span={8}>
+                    <Card
+                        size={"small"}
+                    >
                         <ReactECharts
                             option={cpuRateOption}
-                            style={{height: "30vh", width: "40vw"}}
+                            style={{height: "30vh", width: "100%"}}
                         >
                         </ReactECharts>
                     </Card>
@@ -262,10 +341,10 @@ export function Instance(props) {
             </Row>
             <Row justify={"center"} style={{width: "100%"}}>
                 <Col span={24}>
-                    <Card style={{height:"30vw"}}>
+                    <Card style={{height:"50vh"}}>
                         <Tabs
                             type="editable-card"
-                            style={{width:"100%"}}
+                            style={{width:"100%", height: "50vh"}}
                             activeKey={activeTab}
                             onChange={(newActiveKey)=>{
                                 setActiveTab(newActiveKey)
