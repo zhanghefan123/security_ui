@@ -100,7 +100,7 @@ export function Topology(props) {
     const attackTypes = [
         "udp flood attack",
         "syn flood attack",
-        "ack flood attack",
+        "connection exhausted attack",
         "共识消息重放"
     ]
     const styleForAccessLink = {
