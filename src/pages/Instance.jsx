@@ -36,8 +36,8 @@ export function Instance(props) {
         return ()=>{
             window.removeEventListener('beforeunload', ()=>{
                 StopCapture()
-                clearInterval(captureTimer)
             })
+            clearInterval(captureTimer)
         }
     }, [])
 

@@ -8,7 +8,6 @@ const getWideAreaNetworkTopologyUrl = "/topologies/wide_area_network_topology.tx
 const getDataCenterTopologyUrl = "/topologies/datacenter_topology.txt"
 const getManetTopologyUrl = "/topologies/manet_topology.txt"
 const startAttackRequestUrl = "startAttack"
-
 const startTxRateTestUrl = "startTxRateTest"
 const stopTxRateTestUrl = "stopTxRateTest"
 
@@ -77,7 +76,7 @@ export const startAttackRequest = (maliciousNodeId, params, response_callback, e
     })
 }
 
-
+// startTxRateTest 开启 tps 测速
 export const startTxRateTest = (response_callback, error_callback) => {
     axios.post(`${UrlBase}/${startTxRateTestUrl}`).then((response)=>{
         response_callback(response)
@@ -86,10 +85,15 @@ export const startTxRateTest = (response_callback, error_callback) => {
     })
 }
 
+// stopTxRateTest 停止 tps 测速
 export const stopTxRateTest = (response_callback, error_callback) => {
     axios.post(`${UrlBase}/${stopTxRateTestUrl}`).then((response)=>{
         response_callback(response)
     }, (error)=>{
         error_callback(error)
     })
+}
+
+export const pageClose = () => {
+    window.navigator.sendBeacon(`${UrlBase}/${stopTopologyUrl}`);
 }

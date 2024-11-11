@@ -6,7 +6,7 @@ import {Link} from "../entities/link"
 import {
     getDataCenterTopology, getManetTopology,
     getTopologyState,
-    getWideAreaNetworkTopology, startAttackRequest,
+    getWideAreaNetworkTopology, pageClose, startAttackRequest,
     startTopology, startTxRateTest,
     stopTopology, stopTxRateTest
 } from "../requests/topology";
@@ -265,8 +265,32 @@ export function Topology(props) {
     const [promptBoxLoading, setPromptBoxLoading] = useState(false)
     // ---------------------------------------------------------------------------------------------
 
+    // 4. 组件初始化第一步
+    useEffect(() => {
 
-    // 4. 创建图 - 组件初始化的第一步
+        let beforeTime = 0, leaveTime = 0;
+
+        let beforeUnloadFunction = ()=>{
+            beforeTime = new Date().getTime()
+        }
+
+        let unloadFunction = ()=> {
+            leaveTime = new Date().getTime() - beforeTime
+            if (leaveTime <= 5) {
+                pageClose();
+            }
+        }
+
+        window.addEventListener("beforeunload", beforeUnloadFunction)
+        window.addEventListener("unload", unloadFunction)
+
+        return ()=>{
+            window.removeEventListener("beforeunload", beforeUnloadFunction)
+            window.removeEventListener("unload", unloadFunction)
+        }
+    }, []);
+
+    // 4. 组件初始化的第二步 创建图
     // ---------------------------------------------------------------------------------------------
     useEffect(() => {
         // 原始数据
