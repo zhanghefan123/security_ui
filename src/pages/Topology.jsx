@@ -142,10 +142,10 @@ export function Topology(props) {
     const [availableConsensusTypes, setAvailableConsensusTypes] = useState(consensusTypes[blockchainTypes[0]])
     const [selectedConsensusType, setSelectedConsensusType] = useState(consensusTypes[blockchainTypes[0]][0])
     const [selectedNetworkEnvironment, setSelectedNetworkEnvironment] = useState("自定义环境")
-    const [selectedAccessLinkBandwidth, setSelectedAccessLinkBandwidth] = useState(1)
-    const [selectedConsensusNodeCpuLimit, setSelectedConsensusNodeCpuLimit] = useState(1)
+    const [selectedAccessLinkBandwidth, setSelectedAccessLinkBandwidth] = useState(8)
+    const [selectedConsensusNodeCpuLimit, setSelectedConsensusNodeCpuLimit] = useState(2)
     const [selectedConsensusNodeMemoryLimit, setSelectedConsensusNodeMemoryLimit] = useState(512)
-    const [selectedConsensusThreadCount, setSelectedConsensusThreadCount] = useState(10)
+    const [selectedConsensusThreadCount, setSelectedConsensusThreadCount] = useState(50)
     // 1.7 所有的攻击相关的表单字段
     const [selectedAttackThreadCount, setSelectedAttackThreadCount] = useState(10)
     const [selectedAttackType, setSelectedAttackType] = useState(attackTypes[0])

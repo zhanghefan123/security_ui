@@ -16,6 +16,9 @@ export function Instance(props) {
     const [interfaceRateList, setInterfaceRateList] = useState([])
     const [cpuRatioList, setCpuRatioList] = useState([])
     const [memoryList, setMemoryList] = useState([])
+    const [heightPercentageList, setHeightPercentageList] = useState([])
+
+    let captureTimer = undefined
 
     // 3. 上来就加载一个默认的界面
     useEffect(() => {
@@ -23,7 +26,7 @@ export function Instance(props) {
         AddWebShellLogic()
 
         // 3.2 开启抓包线程
-        let captureTimer = setInterval(()=>{
+        captureTimer = setInterval(()=>{
             StartCapture()
         }, 1000)
 
@@ -47,15 +50,16 @@ export function Instance(props) {
             container_name: containerName.replace("_", "-")
         }
         startCaptureInterfaceRate(params, (response)=>{
-            // console.log("成功开启监听")
             setTimeList(response.data["time_list"])
             setInterfaceRateList(response.data["interface_rate_list"])
             setCpuRatioList(response.data["cpu_ratio_list"])
             setMemoryList(response.data["memory_list"])
+            if (response.data["block_ratio_list"]){
+                setHeightPercentageList(response.data["block_ratio_list"])
+            }
         }, (error)=>{
-            message.error({
-                content: "监听失败"
-            })
+            clearInterval(captureTimer)
+            window.close()
         })
     }
 
@@ -141,7 +145,7 @@ export function Instance(props) {
             text: ''
         },
         grid: {
-            left: "80px",
+            left: "100px",
             right: "80px"
         },
         tooltip: {
@@ -154,7 +158,6 @@ export function Instance(props) {
             }
         },
         xAxis: {
-            name: "时间/S",
             type: "category",
             data: timeList,
             axisLabel: {
@@ -168,7 +171,7 @@ export function Instance(props) {
             name: "节点被攻击速率",
             type: "value",
             axisLabel: {
-                formatter: '{value}',
+                formatter: '{value} Mbps',
                 fontSize: 15
             },
             nameTextStyle: {
@@ -190,25 +193,24 @@ export function Instance(props) {
         }]
     }
 
-    const memoryOption = {
+    const interfaceRateAndRatioOption = {
         title: {
             text: ''
         },
         grid: {
-            left: "80px",
+            left: "100px",
             right: "80px"
         },
         tooltip: {
             trigger: "axis"
         },
         legend: {
-            data:['节点内存'],
+            data:['节点被攻击速率', "区块高度百分比"],
             textStyle: {
                 fontSize: 15, // 图例字体大小
             }
         },
         xAxis: {
-            name: "时间/S",
             type: "category",
             data: timeList,
             axisLabel: {
@@ -218,33 +220,62 @@ export function Instance(props) {
                 fontSize: 20
             }
         },
-        yAxis: {
-            name: "节点内存",
-            type: "value",
-            axisLabel: {
-                formatter: '{value} MB',
-                fontSize: 15
+        yAxis: [
+            {
+                name: "节点被攻击速率",
+                type: "value",
+                axisLabel: {
+                    formatter: '{value} Mbps',
+                    fontSize: 15
+                },
+                nameTextStyle: {
+                    fontSize: 20
+                }
             },
-            nameTextStyle: {
-                fontSize: 20
+            {
+                name: "区块高度百分比",
+                type: "value",
+                axisLabel: {
+                    formatter: '{value} %',
+                    fontSize: 15
+                },
+                nameTextStyle: {
+                    fontSize: 20
+                }
             }
-        },
-        series: [{
-            name: '节点内存',
-            type:'line',
-            yAxisIndex: 0,
-            data: memoryList,
-            lineStyle: {
-                width: 4,
+        ],
+        series: [
+            {
+                name: '节点被攻击速率',
+                type:'line',
+                yAxisIndex: 0,
+                data: interfaceRateList,
+                lineStyle: {
+                    width: 4,
+                    color: "rgb(222,7,7)",
+                },
+                smooth: false,
+                symbolSize: 15,
                 color: "rgb(222,7,7)",
             },
-            smooth: false,
-            symbolSize: 15,
-            color: "rgb(222,7,7)",
-        }]
+            {
+                name: "区块高度百分比",
+                type: "line",
+                yAxisIndex: 1,
+                data: heightPercentageList,
+                lineStyle: {
+                    width: 4,
+                    color: "blue"
+                },
+                smooth: false,
+                symbolSize: 15,
+                color: "blue"
+            }
+        ]
     }
 
-    const cpuRateOption = {
+
+    const cpuAndMemoryRateOption = {
         title: {
             text: "",
         },
@@ -256,13 +287,12 @@ export function Instance(props) {
             trigger: "axis"
         },
         legend: {
-            data:['节点 CPU 利用率'],
+            data:['节点 CPU 利用率', "节点内存"],
             textStyle: {
                 fontSize: 15, // 图例字体大小
             }
         },
         xAxis: {
-            name: "时间/S",
             type: "category",
             data: timeList,
             axisLabel: {
@@ -272,71 +302,96 @@ export function Instance(props) {
                 fontSize: 20
             }
         },
-        yAxis: {
-            name: "节点 CPU 利用率",
-            type: "value",
-            axisLabel: {
-                formatter: '{value}',
-                fontSize: 15
+        yAxis: [
+            {
+                name: "节点 CPU 利用率",
+                type: "value",
+                position: "left",
+                axisLabel: {
+                    formatter: '{value} %',
+                    fontSize: 15
+                },
+                nameTextStyle: {
+                    fontSize: 20
+                },
             },
-            nameTextStyle: {
-                fontSize: 20
-            }
-        },
-        series: [{
-            name: '节点 CPU 利用率',
-            type:'line',
-            yAxisIndex: 0,
-            data: cpuRatioList,
-            lineStyle: {
-                width: 4,
+            {
+                name: "节点内存",
+                type: "value",
+                position: "right",
+                axisLabel: {
+                    formatter: '{value} MB',
+                    fontSize: 15
+                },
+                nameTextStyle: {
+                    fontSize: 20
+                },
+            },
+        ],
+        series: [
+            {
+                name: '节点 CPU 利用率',
+                type:'line',
+                yAxisIndex: 0,
+                data: cpuRatioList,
+                lineStyle: {
+                    width: 4,
+                    color: "rgb(222,7,7)",
+                },
+                smooth: false,
+                symbolSize: 15,
                 color: "rgb(222,7,7)",
             },
-            smooth: false,
-            symbolSize: 15,
-            color: "rgb(222,7,7)",
-        }]
+            {
+                name: '节点内存',
+                type:'line',
+                yAxisIndex: 1,
+                data: memoryList,
+                lineStyle: {
+                    width: 4,
+                    color: "blue",
+                },
+                smooth: false,
+                symbolSize: 15,
+                color: "blue",
+            }
+        ]
+    }
+
+    // 判断应该进行哪种option的返回
+    let echartOption = ()=>{
+        if (containerName.indexOf("ChainMaker") !== -1) {
+            return interfaceRateAndRatioOption
+        } else {
+            return interfaceRateOption
+        }
     }
 
 
     return (
         <div>
             <Row justify={"center"}>
-                <Col span={8}>
+                <Col span={12}>
                     <Card
                         size={"small"}
                     >
                         <ReactECharts
-                            option={interfaceRateOption}
+                            option={echartOption()}
                             style={{height: "30vh", width: "100%"}}
                         >
-
                         </ReactECharts>
                     </Card>
                 </Col>
-                <Col span={8}>
+                <Col span={12}>
                     <Card
                         size={"small"}
                     >
                         <ReactECharts
-                            option={memoryOption}
-                            style={{height: "30vh", width: "100%"}}
-                        >
-
-                        </ReactECharts>
-                    </Card>
-                </Col>
-                <Col span={8}>
-                    <Card
-                        size={"small"}
-                    >
-                        <ReactECharts
-                            option={cpuRateOption}
+                            option={cpuAndMemoryRateOption}
                             style={{height: "30vh", width: "100%"}}
                         >
                         </ReactECharts>
                     </Card>
-
                 </Col>
             </Row>
             <Row justify={"center"} style={{width: "100%"}}>
