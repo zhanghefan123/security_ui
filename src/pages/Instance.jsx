@@ -16,7 +16,7 @@ export function Instance(props) {
     const [interfaceRateList, setInterfaceRateList] = useState([])
     const [cpuRatioList, setCpuRatioList] = useState([])
     const [memoryList, setMemoryList] = useState([])
-    const [heightPercentageList, setHeightPercentageList] = useState([])
+    const [blockRatioList, setBlockRatioList] = useState([])
 
     let captureTimer = undefined
 
@@ -55,7 +55,7 @@ export function Instance(props) {
             setCpuRatioList(response.data["cpu_ratio_list"])
             setMemoryList(response.data["memory_list"])
             if (response.data["block_ratio_list"]){
-                setHeightPercentageList(response.data["block_ratio_list"])
+                setBlockRatioList(response.data["block_ratio_list"])
             }
         }, (error)=>{
             clearInterval(captureTimer)
@@ -262,7 +262,7 @@ export function Instance(props) {
                 name: "区块高度百分比",
                 type: "line",
                 yAxisIndex: 1,
-                data: heightPercentageList,
+                data: blockRatioList,
                 lineStyle: {
                     width: 4,
                     color: "blue"
