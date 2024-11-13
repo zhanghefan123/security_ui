@@ -144,8 +144,8 @@ export function Topology(props) {
     const [selectedNetworkEnvironment, setSelectedNetworkEnvironment] = useState("自定义环境")
     const [selectedAccessLinkBandwidth, setSelectedAccessLinkBandwidth] = useState(8)
     const [selectedConsensusNodeCpuLimit, setSelectedConsensusNodeCpuLimit] = useState(2)
-    const [selectedConsensusNodeMemoryLimit, setSelectedConsensusNodeMemoryLimit] = useState(512)
-    const [selectedConsensusThreadCount, setSelectedConsensusThreadCount] = useState(50)
+    const [selectedConsensusNodeMemoryLimit, setSelectedConsensusNodeMemoryLimit] = useState(1024)
+    const [selectedConsensusThreadCount, setSelectedConsensusThreadCount] = useState(25)
     // 1.7 所有的攻击相关的表单字段
     const [selectedAttackThreadCount, setSelectedAttackThreadCount] = useState(10)
     const [selectedAttackType, setSelectedAttackType] = useState(attackTypes[0])
