@@ -6,7 +6,7 @@ const stopTopologyUrl = "stopTopology"
 const getTopologyStateUrl = "getTopologyState"
 const getWideAreaNetworkTopologyUrl = "/topologies/wide_area_network_topology.txt"
 const getDataCenterTopologyUrl = "/topologies/datacenter_topology.txt"
-const getManetTopologyUrl = "/topologies/manet_topology.txt"
+const getManetTopologyUrl = "/topologies/path_validation_topology.txt"
 const startAttackRequestUrl = "startAttack"
 const startTxRateTestUrl = "startTxRateTest"
 const stopTxRateTestUrl = "stopTxRateTest"
@@ -56,8 +56,8 @@ export const getDataCenterTopology = (response_callback, error_callback) => {
     })
 }
 
-// getManetTopology 获取自组网拓扑
-export const getManetTopology = (response_callback, error_callback) => {
+// getPathValidationTopology 获取路径验证拓扑
+export const getPathValidationTopology = (response_callback, error_callback) => {
     axios.get(`${getManetTopologyUrl}`).then(response=>{
         response_callback(response)
     }, (error)=>{

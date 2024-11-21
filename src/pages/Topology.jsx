@@ -4,7 +4,7 @@ import {Button, Card, Col, Form, message, Modal, Radio, Row, Select, Table, Uplo
 import {Node} from "../entities/node"
 import {Link} from "../entities/link"
 import {
-    getDataCenterTopology, getManetTopology,
+    getDataCenterTopology, getPathValidationTopology,
     getTopologyState,
     getWideAreaNetworkTopology, pageClose, startAttackRequest,
     startTopology, startTxRateTest,
@@ -92,6 +92,7 @@ export function Topology(props) {
         "ConsensusNode",
         "ChainMakerNode",
         "MaliciousNode",
+        "LirNode",
     ]
     const linkTypes = [
         "接入链路",
@@ -160,6 +161,7 @@ export function Topology(props) {
     const [consensusNodes, setConsensusNodes] = useState([])
     const [chainMakerNodes, setChainMakerNodes] = useState([])
     const [maliciousNodes, setMaliciousNodes] = useState([])
+    const [lirNodes, setLirNodes] = useState([])
     const [totalNodesCount, setTotalNodesCount] = useState(0)
     // 1.9 引用 dom 节点
     const graphDivRef = useRef(null); // 创建一个
@@ -817,6 +819,32 @@ export function Topology(props) {
                 return [...prevMaliciousNodes, maliciousNodeId]
             })
             successfullyAdd = true
+        } else if (nodeType === "LirNode"){ // 进行 lir 节点的添加
+            setLirNodes(prevLirNodes=>{
+                let lirNodeId = nodeType + "_" + (prevLirNodes.length + 1)
+                let lirNode = {
+                    id: lirNodeId,
+                    label: lirNodeId,
+                    x: x,
+                    y: y,
+                    size: 40,
+                    img: "./pictures/lirNode.png",
+                    labelCfg: {
+                        position: 'bottom',
+                        style: {
+                            fill: '#ffffff', // 设置字体颜色
+                            fontSize: 14,
+                            background: {
+                                fill: ReturnLableColor(currentState),
+                                padding: [4, 4, 4, 4]
+                            }
+                        }
+                    }
+                }
+                graph.addItem("node", lirNode)
+                return [...prevLirNodes, lirNode]
+            })
+            successfullyAdd = true
         } else {
             console.log("unsupported node type")
         }
@@ -1118,15 +1146,15 @@ export function Topology(props) {
                     content: "切换到数据中心环境失败"
                 })
             })
-        } else if (selectedEnvironment === "自组网环境") {
-            getManetTopology((response) => {
+        } else if (selectedEnvironment === "路径验证环境") {
+            getPathValidationTopology((response) => {
                 rebuildGraph(response.data, false)
                 message.success({
-                    content: "成功切换到自组网环境"
+                    content: "成功切换到路径验证环境"
                 })
             }, (error) => {
                 message.error({
-                    content: "切换到自组网环境失败"
+                    content: "切换到路径验证环境失败"
                 })
             })
         } else {
@@ -1315,7 +1343,7 @@ export function Topology(props) {
                                                     value={selectedNetworkEnvironment} style={{width: "100%"}}>
                                                     <Radio value={"广域网环境"}>广域网环境</Radio>
                                                     <Radio value={"数据中心环境"}>数据中心环境</Radio>
-                                                    <Radio value={"自组网环境"}>自组网环境</Radio>
+                                                    <Radio value={"路径验证环境"}>路径验证环境</Radio>
                                                     <Radio value={"自定义环境"}>自定义环境</Radio>
                                                 </Radio.Group>
                                             </Form.Item>
