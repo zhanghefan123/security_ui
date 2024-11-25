@@ -94,6 +94,7 @@ export const stopTxRateTest = (response_callback, error_callback) => {
     })
 }
 
+// 当页面关闭的时候的操作
 export const pageClose = () => {
     window.navigator.sendBeacon(`${UrlBase}/${stopTopologyUrl}`);
 }
