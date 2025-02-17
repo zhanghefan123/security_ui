@@ -13,15 +13,17 @@ import {Cartesian3} from "cesium";
 
 // Constellation 页面
 export function Constellation(props) {
-    // 1. 参数的定义
+    // 1. 常量的定义
     // ---------------------------------------------------------------------------------------------
-    // 1.1 常量
     const nameOfForm = "constellation_configuration"
-    const orbitNumberField = "orbit_number"
-    const satellitePerOrbitField = "satellite_per_orbit"
+    const orbitNumberField = ["轨道数量", "orbit_number"]
+    const satellitePerOrbitField = ["每轨道卫星数量", "satellite_per_orbit"]
     const firstSplitContent = "配置面板"
     const secondSplitContent = "可视化界面"
-    // 1.2 参数表格
+    // ---------------------------------------------------------------------------------------------
+
+    // 2. 表单结构
+    // ---------------------------------------------------------------------------------------------
     const tableColumns = [
         {
             title: "param",
@@ -34,11 +36,16 @@ export function Constellation(props) {
             key: "paramsValue"
         }
     ]
-    // 1.3 星座参数
+    // ---------------------------------------------------------------------------------------------
+
+    // 3. 星座参数
+    // ---------------------------------------------------------------------------------------------
     const [orbitNumber, setOrbitNumber] = useState()
     const [satellitePerOrbit, setSatellitePerOrbit] = useState()
+    // ---------------------------------------------------------------------------------------------
 
-    // 提示框的内容
+    // 4.提示框的内容
+    // ---------------------------------------------------------------------------------------------
     const promptBoxTypes = {
         startConstellation: Symbol.for("startConstellation"),
         stopConstellation: Symbol.for("stopConstellation"),
@@ -50,36 +57,51 @@ export function Constellation(props) {
     const [promptBoxOkText, setPromptBoxOkText] = useState("ok")
     const [promptBoxCancelText, setPromptBoxCancelText] = useState("cancel")
     const [promptBoxLoading, setPromptBoxLoading] = useState(false)
+    // ---------------------------------------------------------------------------------------------
 
-    // 当前星座的状态
+    // 5. 当前星座的状态 (启动, 未启动)
+    // ---------------------------------------------------------------------------------------------
     const [currentConstellationState, setCurrentConstellationState] = useState(false)
+    // ---------------------------------------------------------------------------------------------
 
-    // 所有实例的实时位置信息
+    // 6. 所有实例的实时位置信息
+    // ---------------------------------------------------------------------------------------------
     const [allInstancePositions, setAllInstancePositions] = useState([])
     const [allLinks, setAllLinks] = useState([])
+    // ---------------------------------------------------------------------------------------------
+
+    // 7. 获取实例状态的 timer
+    // ---------------------------------------------------------------------------------------------
+    const [instanceTimer, setInstanceTimer] = useState(null)
+    // ---------------------------------------------------------------------------------------------
 
 
-    // 开始的时候周期性的进行获取
+    // 8. 组件初始化第一步 -> 进行星座状态的获取
+    // ---------------------------------------------------------------------------------------------
     useEffect(() => {
-        // 在开启的时候获取状态
+        // 在刚开开始的时候进行星座状态的获取
         GetConstellationState()
-
-        // 在开启的时候请求
-        let timer = setInterval(()=>{
-            getInstancePositions()
-        }, 1000)
 
         // 卸载的时候触发的回调
         return ()=>{
-            clearInterval(timer)
+            if(instanceTimer) {
+                clearInterval(instanceTimer)
+            }
         }
     }, []);
 
-    // 进行卫星星座的状态的获取
     function GetConstellationState(){
         getConstellationStateRequest((response)=>{
             if (response.data["state"] === "up"){
                 setCurrentConstellationState(true)
+
+                // 进行 timer 的创建
+                let timer = setInterval(()=>{
+                    getInstancePositions()
+                }, 1000)
+
+                // 进行 instanceTimer 的设置
+                setInstanceTimer(timer)
             } else if(response.data["state"] === "down") {
                 setCurrentConstellationState(false)
             } else {
@@ -93,9 +115,10 @@ export function Constellation(props) {
             })
         })
     }
+    // ---------------------------------------------------------------------------------------------
 
-    // 获取卫星位置
-    // 获取实例的实时的位置
+    // 9. 获取卫星位置的函数
+    // ---------------------------------------------------------------------------------------------
     function getInstancePositions() {
         getInstancePositionsRequest((response)=>{
             let positions = []
@@ -154,9 +177,11 @@ export function Constellation(props) {
             console.log(error)
         })
     }
+    // ---------------------------------------------------------------------------------------------
 
 
-    // 提示框处理函数1
+    // 10. 当提示框的ok按钮所对应的处理函数
+    // ---------------------------------------------------------------------------------------------
     function handlePromptOkCicked(){
         if (promptBoxType === promptBoxTypes.startConstellation) { // 处理 startConstellation
             setPromptBoxLoading(true)
@@ -164,6 +189,7 @@ export function Constellation(props) {
                 orbit_number: orbitNumber,
                 satellite_per_orbit: satellitePerOrbit,
             }
+            // 进行实际的请求的发送
             startConstellationRequest(params, (response)=>{
                 message.success({
                     content: "successfully start the constellation"
@@ -171,6 +197,16 @@ export function Constellation(props) {
                 setCurrentConstellationState(true)
                 setPromptBoxLoading(false)
                 setPromptBoxOpen(false)
+                // 这个时候再调用周期性进行获取的函数
+
+                // 进行 timer 的创建
+                let timer = setInterval(()=>{
+                    getInstancePositions()
+                }, 1000)
+
+                // 将其设置到 instanceTimer 之中
+                setInstanceTimer(timer)
+
             }, (error)=>{
                 message.error({
                     content: `start constellation error ${error}`
@@ -180,50 +216,71 @@ export function Constellation(props) {
             })
         } else if(promptBoxType === promptBoxTypes.stopConstellation) { // 处理 stopConstellation
             setPromptBoxLoading(true)
+            // 进行实际的请求的发送
             stopConstellationRequest((response)=>{
+                // 停止拓扑成功
                 message.success({
                     content: "successfully stop the constellation"
                 })
                 setCurrentConstellationState(false)
                 setPromptBoxLoading(false)
                 setPromptBoxOpen(false)
+
+                // 进行周期性计时器的停止
+                if(instanceTimer){
+                    clearInterval(instanceTimer)
+                }
+
+                // 进行页面的强制刷新
+                window.location.reload()
             }, (error) => {
+                // 停止拓扑失败
                 message.error({
                     content: `stop constellation error ${error}`
                 })
                 setPromptBoxLoading(false)
                 setPromptBoxOpen(false)
+
+                // 进行周期性计时器的停止
+                if(instanceTimer){
+                    clearInterval(instanceTimer)
+                }
             })
         } else {
             console.error("unsupported prompt box type")
         }
-
     }
+    // ---------------------------------------------------------------------------------------------
 
-    // 提示框处理函数2
+    // 11. 当点击提示框 cancel 按钮所对应的处理函数
+    // ---------------------------------------------------------------------------------------------
     function handlePromptCancelClicked(){
         setPromptBoxOpen(false)
     }
+    // ---------------------------------------------------------------------------------------------
 
-    // 验证失败 -> 开启提示框
+    // 12. 验证失败所对应的处理函数
+    // ---------------------------------------------------------------------------------------------
     function onValidateStartConstellationFailed(){
         setPromptBoxOpen(true)
         setPromptBoxTitle("start constellation failed")
         setPromptBoxText("please finish the selection of required arguments")
     }
+    // ---------------------------------------------------------------------------------------------
 
-    // 验证成功开始发送消息
+    // 13. 验证成功开始发送消息
+    // ---------------------------------------------------------------------------------------------
     function onStartConstellationFinish(){
         setPromptBoxType(promptBoxTypes.startConstellation)
         let tableValues = [
             {
                 key: "1",
-                paramsDescription: orbitNumberField,
+                paramsDescription: orbitNumberField[0],
                 paramsValue: orbitNumber,
             },
             {
                 key: "2",
-                paramsDescription: satellitePerOrbitField,
+                paramsDescription: satellitePerOrbitField[0],
                 paramsValue: satellitePerOrbit,
             }
         ]
@@ -233,25 +290,32 @@ export function Constellation(props) {
             <Table dataSource={tableValues} columns={tableColumns}></Table>
         )
     }
+    // ---------------------------------------------------------------------------------------------
 
-    // 当值发生变化的时候进行的操作
+    // 14. 当表单内的内容发生变化的时候的对应的处理函数
+    // ---------------------------------------------------------------------------------------------
     function onStartConstellationValuesChange(changedValues){
-        if(satellitePerOrbitField in changedValues){
-            setSatellitePerOrbit(changedValues[satellitePerOrbitField])
+        if(satellitePerOrbitField[1] in changedValues){
+            setSatellitePerOrbit(changedValues[satellitePerOrbitField[1]])
         }
-        if(orbitNumberField in changedValues){
-            setOrbitNumber(changedValues[orbitNumberField])
+        if(orbitNumberField[1] in changedValues){
+            setOrbitNumber(changedValues[orbitNumberField[1]])
         }
     }
+    // ---------------------------------------------------------------------------------------------
 
-    // stopConstellation 停止星座
+    // 15. stopConstellation 停止星座的回调函数
+    // ---------------------------------------------------------------------------------------------
     function stopConstellation(){
         setPromptBoxType(promptBoxTypes.stopConstellation)
         setPromptBoxOpen(true)
         setPromptBoxTitle("stop constellation")
         setPromptBoxText("please decide whether to stop the constellation")
     }
+    // ---------------------------------------------------------------------------------------------
 
+    // 16. 真实的前端界面
+    // ---------------------------------------------------------------------------------------------
     return (
         <div>
             {/*第1行*/}
@@ -284,8 +348,8 @@ export function Constellation(props) {
                         <Col span={6}></Col>
                         <Col span={4} style={{textAlign: "center"}}>
                             <Form.Item
-                                label={orbitNumberField}
-                                name={orbitNumberField}
+                                label={orbitNumberField[0]}
+                                name={orbitNumberField[1]}
                                 rules={[
                                     {
                                         required: true,
@@ -298,8 +362,8 @@ export function Constellation(props) {
                         </Col>
                         <Col span={4} style={{textAlign: "center"}}>
                             <Form.Item
-                                label={satellitePerOrbitField} // 在表单前面的内容
-                                name={satellitePerOrbitField}
+                                label={satellitePerOrbitField[0]} // 在表单前面的内容
+                                name={satellitePerOrbitField[1]}
                                 rules={[
                                     {
                                         required: true,
@@ -312,12 +376,12 @@ export function Constellation(props) {
                         </Col>
                         <Col span={2} style={{textAlign: "center"}}>
                             <Button type={"primary"} htmlType={"submit"} disabled={currentConstellationState} style={{width: "80%"}}>
-                                start
+                                启动星座
                             </Button>
                         </Col>
                         <Col span={2} style={{textAlign: "center"}}>
                             <Button type={"primary"} danger style={{width:"80%"}} disabled={!currentConstellationState} onClick={stopConstellation}>
-                                stop
+                                销毁星座
                             </Button>
                         </Col>
                         <Col span={6}>
@@ -335,7 +399,7 @@ export function Constellation(props) {
                 </Divider>
             </Row>
             <Card>
-                <Viewer style={{height: "500px"}} timeline={false} homeButton={false} geocoder={false} animation={false} navigationHelpButton={false} fullscreenButton={false}>
+                <Viewer style={{height: "62.4vh"}} timeline={false} homeButton={false} geocoder={false} animation={false} navigationHelpButton={false} fullscreenButton={false}>
                     {allInstancePositions}
                     {allLinks}
                 </Viewer>
@@ -354,4 +418,5 @@ export function Constellation(props) {
             </Modal>
         </div>
     )
+    // ---------------------------------------------------------------------------------------------
 }

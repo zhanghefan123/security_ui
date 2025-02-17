@@ -1,6 +1,6 @@
 import * as G6 from "@antv/g6";
 import React, {useEffect, useRef, useState} from "react";
-import {Button, Card, Col, Form, message, Modal, Radio, Row, Select, Table, Upload} from "antd";
+import {Button, Card, Col, Form, message, Modal, Row, Select, Table, Upload} from "antd";
 import {Node} from "../entities/node"
 import {Link} from "../entities/link"
 import {
@@ -14,9 +14,10 @@ import {InputNumber} from "antd/lib";
 import {ProForm} from "@ant-design/pro-components";
 import {UploadOutlined} from "@ant-design/icons";
 import ReactECharts from "echarts-for-react";
-
 const {getLabelPosition, transform} = G6.Util;
 
+// 所有的网路节点的可能的类型
+// ---------------------------------------------------------------------------
 // NetworkNodeType_NormalSatellite    NetworkNodeType = 0 (constellation 专用)
 // NetworkNodeType_ConsensusSatellite NetworkNodeType = 1 (constellation 专用)
 // NetworkNodeType_EtcdService        NetworkNodeType = 2 (constellation 专用)
@@ -25,8 +26,15 @@ const {getLabelPosition, transform} = G6.Util;
 // NetworkNodeType_NormalNode         NetworkNodeType = 5 (topology 专用)
 // NetworkNodeType_ConsensusNode      NetworkNodeType = 6 (topology 专用)
 // NetworkNodeType_MaliciousNode      NetworkNodeType = 7 (topology 专用)
+// ---------------------------------------------------------------------------
 
+
+// 函数化组件
 export function Topology(props) {
+
+
+    // 1. 进行 G6 拓扑的自定义的边的注册
+    // ---------------------------------------------------------------------------------------------
     G6.registerEdge(
         "arrow-running",
         {
@@ -74,18 +82,19 @@ export function Topology(props) {
                         };
                     },
                     {
-                        repeat: true, // Whether executes the animation repeatly
-                        duration: 3000 // the duration for executing once
+                        repeat: true, // Whether executes the animation repeatly 是否边的动画
+                        duration: 3000 // the duration for executing once 每次动画的执行过程
                     }
                 );
             }
         },
         "line" // extend the built-in edge 'cubic'
     );
-
-    // 1. 参数的定义
     // ---------------------------------------------------------------------------------------------
-    // 1.1 节点和链路类型
+
+    // 2. 类型的定义
+    // ---------------------------------------------------------------------------------------------
+    // 2.1 节点类型
     const nodeTypes = [
         "Router",
         "NormalNode",
@@ -94,15 +103,10 @@ export function Topology(props) {
         "MaliciousNode",
         "LirNode",
     ]
+    // 2.2 链路类型
     const linkTypes = [
         "接入链路",
         "骨干链路"
-    ]
-    const attackTypes = [
-        "udp flood attack",
-        "syn flood attack",
-        "connection exhausted attack",
-        "共识消息重放"
     ]
     const styleForAccessLink = {
         stroke: '#0bef1e',
@@ -112,24 +116,14 @@ export function Topology(props) {
         stroke: '#0b39ef',
         lineWidth: 5,
     }
-    // 表单
-    const [startTopologyForm] = ProForm.useForm()
-    // 1.2 所有的拓扑配置相关表单字段
-    const networkEnvironmentField = ["网络环境", "network_env"]
-    const blockchainTypeField = ["区块链类型", "blockchain_type"]
-    const consensusTypeField = ["共识类型", "consensus_type"]
-    const accessLinkBandwidthField = ["接入链路带宽", "接入链路带宽(mbps)"]
-    const consensusNodeCpuField = ["共识节点CPU", "共识节点CPU(个)"]
-    const consensusNodeMemoryField = ["共识节点内存", "共识节点内存 (MB)"]
-    const consensusThreadCountField = ["共识线程数量", "consensus_thread_count"]
-    const totalNodesCountField = ["总节点数量", "total_node_count"]
-    // 1.3 所有攻击相关的表单字段
-    const attackThreadCountField = ["攻击线程数量", "attack_thread_count"]
-    const attackTypeField = ["攻击类型", "attack_type"]
-    const attackNodeField = ["攻击节点", "attack_node"]
-    const attackedNodeField = ["被攻击节点", "attacked_node"]
-    const attackDurationField = ["攻击时间", "attack_duration"]
-    // 1.4 区块链的类型
+    // 2.3 攻击类型
+    const attackTypes = [
+        "udp flood attack",
+        "syn flood attack",
+        "connection exhausted attack",
+        "共识消息重放"
+    ]
+    // 2.4 区块链的类型
     const blockchainTypes = ["长安链", "以太坊", "fabric", "BIDL", "百度超级链"]
     const consensusTypes = {
         "长安链": ["TBFT", "RAFT", "MAXBFT"],
@@ -138,7 +132,31 @@ export function Topology(props) {
         "BIDL": ["PBFT-并行", "PBFT-串行"],
         "百度超级链": ["TDPoS", "PoA"]
     }
-    // 1.6 所有的拓扑创建相关的表单字段
+    // ---------------------------------------------------------------------------------------------
+
+    // 3.表单
+    // ---------------------------------------------------------------------------------------------
+    const [startTopologyForm] = ProForm.useForm()
+    // ---------------------------------------------------------------------------------------------
+
+    // 4. 字段的中英文
+    // ---------------------------------------------------------------------------------------------
+    // 4.1 拓扑配置相关表单字段
+    const networkEnvironmentField = ["网络环境", "network_env"]
+    const blockchainTypeField = ["区块链类型", "blockchain_type"]
+    const consensusTypeField = ["共识类型", "consensus_type"]
+    const accessLinkBandwidthField = ["接入链路带宽", "接入链路带宽(mbps)"]
+    const consensusNodeCpuField = ["共识节点CPU", "共识节点CPU(个)"]
+    const consensusNodeMemoryField = ["共识节点内存", "共识节点内存 (MB)"]
+    const consensusThreadCountField = ["共识线程数量", "consensus_thread_count"]
+    const totalNodesCountField = ["总节点数量", "total_node_count"]
+    // 4.2 攻击相关表单字段
+    const attackThreadCountField = ["攻击线程数量", "attack_thread_count"]
+    const attackTypeField = ["攻击类型", "attack_type"]
+    const attackNodeField = ["攻击节点", "attack_node"]
+    const attackedNodeField = ["被攻击节点", "attacked_node"]
+    const attackDurationField = ["攻击时间", "attack_duration"]
+    // 4.3 拓扑创建相关的表单字段
     const [selectedBlockchain, setSelectedBlockchain] = useState(blockchainTypes[0])
     const [availableConsensusTypes, setAvailableConsensusTypes] = useState(consensusTypes[blockchainTypes[0]])
     const [selectedConsensusType, setSelectedConsensusType] = useState(consensusTypes[blockchainTypes[0]][0])
@@ -147,13 +165,16 @@ export function Topology(props) {
     const [selectedConsensusNodeCpuLimit, setSelectedConsensusNodeCpuLimit] = useState(2)
     const [selectedConsensusNodeMemoryLimit, setSelectedConsensusNodeMemoryLimit] = useState(1024)
     const [selectedConsensusThreadCount, setSelectedConsensusThreadCount] = useState(25)
-    // 1.7 所有的攻击相关的表单字段
+    // 4.4 所有的攻击相关的表单字段
     const [selectedAttackThreadCount, setSelectedAttackThreadCount] = useState(10)
     const [selectedAttackType, setSelectedAttackType] = useState(attackTypes[0])
     const [selectedAttackNode, setSelectedAttackNode] = useState("")
     const [selectedAttackedNode, setSelectedAttackedNode] = useState("")
     const [selectedAttackDuration, setSelectedAttackDuration] = useState(1)
-    // 1.8 拓扑状态
+    // ---------------------------------------------------------------------------------------------
+
+    // 5. 拓扑状态
+    // ---------------------------------------------------------------------------------------------
     const [currentTopologyState, setCurrentTopologyState] = useState(false)
     const [currentAttackState, setCurrentAttackState] = useState(false)
     const [routers, setRouters] = useState([])
@@ -163,13 +184,22 @@ export function Topology(props) {
     const [maliciousNodes, setMaliciousNodes] = useState([])
     const [lirNodes, setLirNodes] = useState([])
     const [totalNodesCount, setTotalNodesCount] = useState(0)
-    // 1.9 引用 dom 节点
+    // ---------------------------------------------------------------------------------------------
+
+    // 6. 图的引用
+    // ---------------------------------------------------------------------------------------------
     const graphDivRef = useRef(null); // 创建一个
-    // 1.10 当前 tps
+    // ---------------------------------------------------------------------------------------------
+
+    // 7. tps 的相关状态
+    // ---------------------------------------------------------------------------------------------
     const [timeList, setTimeList] = useState([1, 2, 3])
     const [currentTps, setCurrentTps] = useState([1, 2, 3])
     const [txRateTimer, setTxRateTimer] = useState()
-    // 1.11 参数表格
+    // ---------------------------------------------------------------------------------------------
+
+    // 8. 参数表格
+    // ---------------------------------------------------------------------------------------------
     const tableColumns = [
         {
             title: "参数",
@@ -182,7 +212,10 @@ export function Topology(props) {
             key: "paramsValue"
         }
     ]
-    // 1.11 速率
+    // ---------------------------------------------------------------------------------------------
+
+    // 9. tps 折线图的配置项
+    // ---------------------------------------------------------------------------------------------
     const rateOption = {
         title: {
             text: ''
@@ -195,7 +228,7 @@ export function Topology(props) {
             trigger: 'axis'
         },
         legend: {
-            data: ['共识速率/tps'],
+            data: ['共识速率/TPS'],
             textStyle: {
                 fontSize: 15, // 图例字体大小
             }
@@ -238,26 +271,34 @@ export function Topology(props) {
     }
     // ---------------------------------------------------------------------------------------------
 
-    // 2. 组件初始化
+    // 10. 拓扑配置相关状态
     // ---------------------------------------------------------------------------------------------
-    // 2.1 组件属性
-    const [nodeType, setNodeType] = useState("Router")  // 当前选中的节点的类型 -> 状态
+    // 10.1 选择的节点类型
+    const [selectedNodeType, setSelectedNodeType] = useState("Router")
+    // 10.2 选择的链路类型
+    const [selectedLinkType, setSelectedLinkType] = useState("Router")
+    // ---------------------------------------------------------------------------------------------
+
+    // 11. 组件初始化过程中使用到的状态
+    // ---------------------------------------------------------------------------------------------
+    // 11.1 组件属性
     const [graph, setGraph] = useState(undefined)
-    // 2.2 组件的初始化步骤
+    // 11.2 组件的初始化步骤
     const [createGraph, setCreateGraph] = useState(0)
     const [getState, setGetState] = useState(0)
     // ---------------------------------------------------------------------------------------------
 
-    // 3. 提示框相关
+
+    // 12. 提示框 promptbox 相关
     // ---------------------------------------------------------------------------------------------
-    // 3.1 提示框的类型
+    // 12.1 提示框的类型
     const promptBoxTypes = {
         startTopology: Symbol.for("startTopology"),
         stopTopology: Symbol.for("stopTopology"),
         startAttack: Symbol.for("startAttack"),
         errorParameters: Symbol.for("errorParameters"),
     }
-    // 3.2 提示框的各个属性
+    // 12.2 提示框的各个属性
     const [promptBoxType, setPromptBoxType] = useState()
     const [promptBoxTitle, setPromptBoxTitle] = useState("Warning");
     const [promptBoxOpen, setPromptBoxOpen] = useState(false)
@@ -267,7 +308,8 @@ export function Topology(props) {
     const [promptBoxLoading, setPromptBoxLoading] = useState(false)
     // ---------------------------------------------------------------------------------------------
 
-    // 4. 组件初始化第一步
+    // 13. 函数化组件初始化第一步 - 进行监听器的设置
+    // ---------------------------------------------------------------------------------------------
     useEffect(() => {
 
         let beforeTime = 0, leaveTime = 0;
@@ -276,6 +318,7 @@ export function Topology(props) {
             beforeTime = new Date().getTime()
         }
 
+        // 当 leaveTime <= 5 的时候, 可以判断用户是直接进行了页面的关闭
         let unloadFunction = ()=> {
             leaveTime = new Date().getTime() - beforeTime
             if (leaveTime <= 5) {
@@ -283,16 +326,24 @@ export function Topology(props) {
             }
         }
 
+        // 注册回调函数, 回调函数在 beforeunload 和 unload 事件发生的时候被调用
         window.addEventListener("beforeunload", beforeUnloadFunction)
         window.addEventListener("unload", unloadFunction)
 
+        // 在结束的时候进行卸载
         return ()=>{
+            // 进行监听器的删除
             window.removeEventListener("beforeunload", beforeUnloadFunction)
             window.removeEventListener("unload", unloadFunction)
+            // 进行 timer 的删除
+            if(txRateTimer){
+                clearInterval(txRateTimer)
+            }
         }
     }, []);
+    // ---------------------------------------------------------------------------------------------
 
-    // 4. 组件初始化的第二步 创建图
+    // 14. 组件初始化的第二步 创建图
     // ---------------------------------------------------------------------------------------------
     useEffect(() => {
         // 原始数据
@@ -379,7 +430,7 @@ export function Topology(props) {
     }, []);
     // ---------------------------------------------------------------------------------------------
 
-    // 5. 在创建图之后, 进行拓扑状态的获取 - 组件初始化的第二步
+    // 15. 组件初始化的的第三步 - 进行图的状态的获取
     // ---------------------------------------------------------------------------------------------
     useEffect(() => {
         if (createGraph === 1) {
@@ -412,14 +463,6 @@ export function Topology(props) {
         }
     }, [createGraph]);
 
-    useEffect(() => {
-        return () => {
-            if (txRateTimer) {
-                clearInterval(txRateTimer)
-            }
-        }
-    }, [])
-
     // 根据后端返回的参数重新进行图的构建
     function rebuildGraph(topology_params, state) {
         // 需要先进行所有的节点的删除
@@ -449,10 +492,9 @@ export function Topology(props) {
         setMaliciousNodes([])
         setTotalNodesCount([])
     }
-
     // ---------------------------------------------------------------------------------------------
 
-    // 6. 向图之中进行组件的添加, 组件初始化的第三步
+    // 16. 组件初始化的第三步 - 向图之中进行菜单, 插件的添加
     // ---------------------------------------------------------------------------------------------
     useEffect(() => {
         if (getState === 1) {
@@ -537,9 +579,9 @@ export function Topology(props) {
     }, [getState, currentTopologyState, graph]);
     // ---------------------------------------------------------------------------------------------
 
-    // 7. 提示框的处理函数
+    // 17. 提示框的处理函数
     // ---------------------------------------------------------------------------------------------
-    // 7.1 当提示框点击了 OK 的时候
+    // 17.1 当提示框点击了 OK 的时候
     function handlePromptOkCicked() {
         if (promptBoxType === promptBoxTypes.startTopology) { // 如果是启动拓扑的话
             setPromptBoxLoading(true)
@@ -660,32 +702,33 @@ export function Topology(props) {
         }
     }
 
-    // 7.2 当提示框点击了取消的时候
+    // 17.2 当提示框点击了取消的时候
     function handlePromptCancelCicked() {
         setPromptBoxOpen(false)
     }
 
     // ---------------------------------------------------------------------------------------------
 
-    // 9. 拓扑操作
+    // 18. 拓扑操作
     // ---------------------------------------------------------------------------------------------
-    // 9.1 进行节点的添加
+    // 18.1 进行节点的添加
     const AddNodeButtonClicked = () => {
         let middleX = graphDivRef.current.clientWidth / 2
         let middleY = graphDivRef.current.clientHeight / 2
-        AddNodeLogic(nodeType, middleX, middleY, false)
+        AddNodeLogic(selectedNodeType, middleX, middleY, false)
     }
 
-    // 9.2 进行颜色的定义
+    // 18.2 进行颜色的定义
     function ReturnLableColor(currentState) {
+        // 如果当前为启动状态 -> 那么为绿色
         if (currentState) {
             return '#4fde07'
-        } else {
+        } else { // 如果当前为关闭状态 -> 那么为红色
             return '#de0707'
         }
     }
 
-    // 9.3 节点添加的逻辑
+    // 18.3 节点添加的逻辑
     const AddNodeLogic = (nodeType, x, y, currentState) => {
         let successfullyAdd = false
         if (nodeType === "Router") { // 进行路由节点的添加
@@ -856,7 +899,7 @@ export function Topology(props) {
         }
     }
 
-    // 9.3 边添加的逻辑
+    // 18.4 边添加的逻辑
     function AddEdgeLogic(sourceNodeId, targetNodeId, link_type) {
         if (link_type === "access") {
             graph.addItem("edge", {
@@ -876,21 +919,20 @@ export function Topology(props) {
 
     // ---------------------------------------------------------------------------------------------
 
-    // 10. 按钮
+    // 19. 按钮
     // ---------------------------------------------------------------------------------------------
-    // 10.1 进行拓扑的删除
+    // 19.1 进行拓扑的删除
     function StopTopology() {
         setPromptBoxType(promptBoxTypes.stopTopology)
         setPromptBoxOpen(true)
         setPromptBoxTitle("停止拓扑")
         setPromptBoxText("请确认是否停止拓扑!")
     }
-
     // ---------------------------------------------------------------------------------------------
 
-    // 11. 处理拓扑启动表单
+    // 20. 处理拓扑启动表单
     // ---------------------------------------------------------------------------------------------
-    // 11.1 当验证失败的时候
+    // 20.1 当验证失败的时候
     function onValidateStartTopologyFailed() {
         setPromptBoxOpen(true)
         setPromptBoxTitle("启动拓扑失败")
@@ -902,7 +944,7 @@ export function Topology(props) {
         setPromptBoxType(promptBoxTypes.errorParameters)
     }
 
-    // 11.2 当启动拓扑的时候
+    // 20.2 当启动拓扑的时候
     function onStartTopologyFinish() {
         setPromptBoxType(promptBoxTypes.startTopology)
         let tableValues = [
@@ -949,7 +991,7 @@ export function Topology(props) {
         )
     }
 
-    // 11.3 当拓扑的值改变的时候
+    // 20.3 当拓扑的值改变的时候
     function onStartTopologyValuesChange(changedValues) {
         if (networkEnvironmentField[0] in changedValues) {
             setSelectedNetworkEnvironment(changedValues[networkEnvironmentField[0]]);
@@ -976,9 +1018,9 @@ export function Topology(props) {
 
     // ---------------------------------------------------------------------------------------------
 
-    // 12. 处理攻击表单
+    // 21. 处理攻击表单
     // ---------------------------------------------------------------------------------------------
-    // 12.1 当验证失败的时候
+    // 21.1 当验证失败的时候
     function onValidateStartAttackFailed() {
         setPromptBoxOpen(true)
         setPromptBoxTitle("启动攻击失败")
@@ -986,7 +1028,7 @@ export function Topology(props) {
         setPromptBoxType(promptBoxTypes.errorParameters)
     }
 
-    // 12.2 当启动攻击的时候
+    // 21.2 当启动攻击的时候
     function onStartAttackFinish() {
         let tableValues = [
             {
@@ -1023,7 +1065,7 @@ export function Topology(props) {
         )
     }
 
-    // 12.3 当拓扑的值改变的时候
+    // 21.3 当拓扑的值改变的时候
     function onStartAttackValuesChange(changedValues) {
         if (attackThreadCountField[0] in changedValues) {
             setSelectedAttackThreadCount(changedValues[attackThreadCountField[0]])
@@ -1045,9 +1087,9 @@ export function Topology(props) {
     // ---------------------------------------------------------------------------------------------
 
 
-    // 11. 保存上传拓扑相关代码
+    // 22. 保存上传拓扑相关代码
     // ---------------------------------------------------------------------------------------------
-    // 11.1 进行拓扑的保存
+    // 22.1 进行拓扑的保存
     function saveTopology() {
         // 进行所有的节点的信息的收集
         let nodesMap = {}
@@ -1097,7 +1139,7 @@ export function Topology(props) {
         document.body.removeChild(link);
     }
 
-    // 11.2 加载拓扑
+    // 22.2 加载拓扑
     const uploadProps = {
         beforeUpload: (file) => {
             const fileReader = new FileReader()
@@ -1121,9 +1163,9 @@ export function Topology(props) {
     }
     // ---------------------------------------------------------------------------------------------
 
-    // 12. 网络环境的变化
-    function onEnvironmentChange(e) {
-        const selectedEnvironment = e.target.value
+    // 23. 网络环境的变化所对应的回调函数
+    // ---------------------------------------------------------------------------------------------
+    function onEnvironmentChange(selectedEnvironment) {
         if (selectedEnvironment === "广域网环境") {
             getWideAreaNetworkTopology((response) => {
                 rebuildGraph(response.data, false)
@@ -1135,15 +1177,15 @@ export function Topology(props) {
                     content: "切换到广域网环境失败"
                 })
             })
-        } else if (selectedEnvironment === "数据中心环境") {
+        } else if (selectedEnvironment === "多播路径验证环境") {
             getDataCenterTopology((response) => {
                 rebuildGraph(response.data, false)
                 message.success({
-                    content: "成功切换到数据中心环境"
+                    content: "成功切换到多播路径验证环境"
                 })
             }, (error) => {
                 message.error({
-                    content: "切换到数据中心环境失败"
+                    content: "切换到多播路径验证环境失败"
                 })
             })
         } else if (selectedEnvironment === "路径验证环境") {
@@ -1168,8 +1210,10 @@ export function Topology(props) {
             })
         }
     }
+    // ---------------------------------------------------------------------------------------------
 
-    // 13. 开启共识和停止共识
+    // 24. 开启共识和停止共识按钮的回调函数
+    // ---------------------------------------------------------------------------------------------
     function startTxRateTestClicked() {
         startTxRateTest((response) => {
             setTimeList(response.data["time_list"])
@@ -1207,9 +1251,10 @@ export function Topology(props) {
             })
         })
     }
+    // ---------------------------------------------------------------------------------------------
 
-    // 13. 实际的 HTML 代码
-    // 13.1
+    // 25. 实际的 HTML 代码
+    // ---------------------------------------------------------------------------------------------
     return (
         <div>
             {/*空行*/}
@@ -1219,7 +1264,7 @@ export function Topology(props) {
             <Row>
                 <Col span={13}>
                     <Card
-                        size={"small"}
+                        // size={"small"}
                         title={"拓扑配置"}
                         style={{marginLeft: "1vw", marginRight: "1vw"}}
                     >
@@ -1229,7 +1274,7 @@ export function Topology(props) {
                                     defaultValue="Router"
                                     style={{width: "80%"}}
                                     onChange={(value) => {
-                                        setNodeType(value)
+                                        setSelectedNodeType(value)
                                     }}
                                     options={nodeTypes.map((nodeType) => ({
                                         label: nodeType,
@@ -1292,7 +1337,7 @@ export function Topology(props) {
                     <Row style={{marginLeft: "1vw", marginRight: "1vw"}}>
                         <Col span={12}>
                             <Card
-                                size={"small"}
+                                // size={"small"}
                                 title={"区块链系统配置"}
                             >
                                 {/*注意 Form 是可以当成一行的*/}
@@ -1337,15 +1382,31 @@ export function Topology(props) {
                                                     span: 16,
                                                 }}
                                             >
-                                                <Radio.Group
+
+                                                <Select
                                                     disabled={currentTopologyState}
+                                                    value={selectedNetworkEnvironment}
+                                                    style={{width: "100%"}}
                                                     onChange={onEnvironmentChange}
-                                                    value={selectedNetworkEnvironment} style={{width: "100%"}}>
-                                                    <Radio value={"广域网环境"}>广域网环境</Radio>
-                                                    <Radio value={"数据中心环境"}>数据中心环境</Radio>
-                                                    <Radio value={"路径验证环境"}>路径验证环境</Radio>
-                                                    <Radio value={"自定义环境"}>自定义环境</Radio>
-                                                </Radio.Group>
+                                                    options={[
+                                                        {
+                                                            label: "广域网环境",
+                                                            value: "广域网环境",
+                                                        },
+                                                        {
+                                                            label: "多播路径验证环境",
+                                                            value: "多播路径验证环境",
+                                                        },
+                                                        {
+                                                            label: "路径验证环境",
+                                                            value: "路径验证环境",
+                                                        },
+                                                        {
+                                                            label: "自定义环境",
+                                                            value: "自定义环境",
+                                                        }
+                                                    ]}
+                                                />
                                             </Form.Item>
                                         </Col>
                                     </Row>
@@ -1503,6 +1564,9 @@ export function Topology(props) {
                                             <InputNumber></InputNumber>
                                         </Form.Item>
                                     </Row>
+                                    <Row style={{height: "2.3vh"}}>
+
+                                    </Row>
                                     <Row>
                                         <Col span={11} style={{textAlign: "center"}}>
                                             <Button
@@ -1525,6 +1589,9 @@ export function Topology(props) {
                                             </Button>
                                         </Col>
                                     </Row>
+                                    <Row style={{height: "2.3vh"}}>
+
+                                    </Row>
                                 </Form>
                             </Card>
                         </Col>
@@ -1534,7 +1601,7 @@ export function Topology(props) {
 
                         <Col span={11}>
                             <Card
-                                size={"small"}
+                                // size={"small"}
                                 title={"攻击配置"}
                             >
                                 <Form
@@ -1686,7 +1753,7 @@ export function Topology(props) {
                             </Card>
                             <Row style={{height: "0.6vh"}}></Row>
                             <Card
-                                size={"small"}
+                                // size={"small"}
                                 title={"共识配置"}
                             >
                                 <Row>
@@ -1729,11 +1796,11 @@ export function Topology(props) {
                     </Row>
                 </Col>
 
-
+                {/*右侧的拓扑展示界面*/}
                 <Col span={11}>
-                    <Row style={{marginLeft: "1vw", marginRight: "1vw"}}>
+                    <Row style={{marginLeft: "1vw", marginRight: "1vw", height: "100%"}}>
                         <div ref={graphDivRef} id="graph"
-                             style={{backgroundColor: "grey", width: "100%", height: "87.5vh"}}>
+                             style={{backgroundColor: "grey", width: "100%", height: "100%"}}>
                         </div>
                     </Row>
                 </Col>
@@ -1752,4 +1819,5 @@ export function Topology(props) {
             </Modal>
         </div>
     )
+    // ---------------------------------------------------------------------------------------------
 }
