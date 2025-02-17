@@ -477,10 +477,9 @@ export function Topology(props) {
                 let sourceNodeId = link["source_node"]["type"] + "_" + link["source_node"]["index"]
                 let targetNodeId = link["target_node"]["type"] + "_" + link["target_node"]["index"]
                 let link_type = link["link_type"]
-                console.log(link_type)
                 AddEdgeLogic(sourceNodeId, targetNodeId, link_type)
             }
-        }, 1)
+        }, 50)
     }
 
     function clearState() {

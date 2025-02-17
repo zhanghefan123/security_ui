@@ -1,0 +1,54 @@
+{
+  "ground_stations": [
+    {
+      "name": "NASA White Sands Complex",
+      "latitude": 32.3850,
+      "longitude": -106.7450
+    },
+    {
+      "name": "ESA Kourou Ground Station",
+      "latitude": 5.1500,
+      "longitude": -52.6333
+    },
+    {
+      "name": "CSIR HartRAO (Hartebeesthoek)",
+      "latitude": -25.9980,
+      "longitude": 27.6980
+    },
+    {
+      "name": "Xinjiang Astronomical Observatory",
+      "latitude": 43.6200,
+      "longitude": 87.5300
+    },
+    {
+      "name": "Goldstone Deep Space Communications Complex",
+      "latitude": 35.4147,
+      "longitude": -116.8789
+    },
+    {
+      "name": "Tiangong Space Station Tracking Station",
+      "latitude": 28.2000,
+      "longitude": 113.0000
+    },
+    {
+      "name": "Svalbard Satellite Station",
+      "latitude": 78.2167,
+      "longitude": 16.3667
+    },
+    {
+      "name": "Canberra Deep Space Communication Complex",
+      "latitude": -35.4400,
+      "longitude": 148.9800
+    },
+    {
+      "name": "Malindi Ground Station",
+      "latitude": -2.9940,
+      "longitude": 40.0640
+    },
+    {
+      "name": "McMurdo Station (Antarctica)",
+      "latitude": -77.8419,
+      "longitude": 166.6820
+    }
+  ]
+}

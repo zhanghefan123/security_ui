@@ -6,7 +6,7 @@ import {Instance} from "../pages/Instance"
 export const RoutesMapping = new Map([
     [0, ["拓扑配置界面", "/topology", <Topology/>]],
     [1, ["星座可视化界面", "/constellation", <Constellation/>]],
-    [2, ["命令行", "/instance/:containerName", <Instance/>]]
+    [2, ["命令行", "/instance/:containerName", <Instance/>]],
 ])
 
 // GenerateRoutes 进行路由 Tags 的生成
