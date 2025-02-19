@@ -11,9 +11,9 @@ import {
 } from "../requests/constellation";
 import {Cartesian3, ScreenSpaceEventHandler, ScreenSpaceEventType} from "cesium";
 import * as Cesium from "cesium";
+import {ProForm} from "@ant-design/pro-components";
 
 // react for cesium 官方参考网址 https://resium.reearth.io/components/PointGraphics
-
 
 // Constellation 页面
 export function Constellation(props) {
@@ -23,23 +23,24 @@ export function Constellation(props) {
     // 1. 常量的定义
     // ---------------------------------------------------------------------------------------------
     const nameOfForm = "constellation_configuration"
-    const orbitNumberField = ["轨道数量", "orbit_number"]
-    const satellitePerOrbitField = ["每轨道卫星数量", "satellite_per_orbit"]
-    const groundStationsField = ["地面站列表", "ground_stations"]
+    const orbitNumberFieldName = ["轨道数量", "orbit_number"]
+    const satellitePerOrbitFieldName = ["每轨道卫星数量", "satellite_per_orbit"]
+    const groundStationsFieldName = ["地面站列表", "ground_stations"]
     const firstSplitContent = "配置面板"
     const secondSplitContent = "可视化界面"
     // ---------------------------------------------------------------------------------------------
 
     // 2. 表单结构
     // ---------------------------------------------------------------------------------------------
+    const [startConstellationForm] = ProForm.useForm()
     const tableColumns = [
         {
-            title: "param",
+            title: "参数",
             dataIndex: "paramsDescription",
             key: "paramsDescription"
         },
         {
-            title: "value",
+            title: "参数值",
             dataIndex: "paramsValue",
             key: "paramsValue"
         }
@@ -48,9 +49,10 @@ export function Constellation(props) {
 
     // 3. 星座参数
     // ---------------------------------------------------------------------------------------------
-    const [orbitNumber, setOrbitNumber] = useState()
-    const [satellitePerOrbit, setSatellitePerOrbit] = useState()
+    const [orbitNumber, setOrbitNumber] = useState(1)
+    const [satellitePerOrbit, setSatellitePerOrbit] = useState(11)
     const [availableGroundStations, setAvailableGroundStations] = useState([])
+    const [availableGroundStationsMapping, setAvailableGroundStationsMapping] = useState({})
     const [selectedGroundStations, setSelectedGroundStations] = useState([])
     // ---------------------------------------------------------------------------------------------
 
@@ -59,7 +61,6 @@ export function Constellation(props) {
     const promptBoxTypes = {
         startConstellation: Symbol.for("startConstellation"),
         stopConstellation: Symbol.for("stopConstellation"),
-        addGroundStation: Symbol.for("addGroundStation")
     }
     const [promptBoxType, setPromptBoxType] = useState(promptBoxTypes.startConstellation)
     const [promptBoxTitle, setPromptBoxTitle] = useState("Warning");
@@ -101,20 +102,20 @@ export function Constellation(props) {
         GetAvailableGroundStations()
 
         // 注册监听器 -> 这里进行延迟加载
-        setTimeout(()=>{
+        setTimeout(() => {
             registerHandler()
         }, 50)
 
         // 卸载的时候触发的回调
-        return ()=>{
-            if(instanceTimer) {
+        return () => {
+            if (instanceTimer) {
                 clearInterval(instanceTimer)
             }
         }
     }, []);
 
-
-    function registerHandler(){
+    // registerHandler 注册处理器
+    function registerHandler() {
         const viewer = viewerRef.current.cesiumElement
         const handler = new ScreenSpaceEventHandler(viewer.scene.canvas)
 
@@ -122,57 +123,96 @@ export function Constellation(props) {
         handler.setInputAction((movement) => {
             let pick = viewer.scene.pick(movement.position)
             let entity = pick.id
-            if(entity.box){
-                entity.box.material = Cesium.Color.GREEN.withAlpha(1)
+            // 如果是红色的话那么转为绿色
+            if (entity.box) {
+                if (Cesium.Color.equals(entity.box.material.color._value, Cesium.Color.RED)) {
+                    // 从红色转绿色, 将地面站添加到地面站列表之中
+                    entity.box.material = Cesium.Color.GREEN.withAlpha(1)
+                    // 进行state的更新
+                    setSelectedGroundStations(prevSelectedGroundStations => {
+                        startConstellationForm.setFieldsValue({
+                            "地面站列表": [...prevSelectedGroundStations, entity.name]
+                        })
+                        return [...prevSelectedGroundStations, entity.name]
+                    })
+                } else {
+                    // 从绿色转红色, 将地面站从地面站列表之中移除
+                    entity.box.material = Cesium.Color.RED.withAlpha(1)
+                    // 进行 state 和表单内字段的更新
+                    setSelectedGroundStations(prevSelectedGroundStations => {
+                            // 找到相应的元素的位置
+                            let index = prevSelectedGroundStations.indexOf(entity.name)
+                            // 已经找到了相应的元素
+                            if (index > -1) {
+                                // 利用这个位置进行删除
+                                prevSelectedGroundStations.splice(index, 1)
+                                // 需要调用 react 自己的方法进行设置
+                                startConstellationForm.setFieldsValue({
+                                    "地面站列表": [...prevSelectedGroundStations]
+                                })
+                            } else { // 如果没有找到相应的元素则需要进行报错
+                                message.error({
+                                    content: "cannot find the ground station"
+                                })
+                            }
+                            return [...prevSelectedGroundStations]
+                        }
+                    )
+                }
             }
         }, ScreenSpaceEventType.RIGHT_CLICK);
-
-        // 强制场景更新
     }
 
-    function GetConstellationState(){
-        getConstellationStateRequest((response)=>{
-            if (response.data["state"] === "up"){
+    // 获取星座的状态
+    function GetConstellationState() {
+        getConstellationStateRequest((response) => {
+            if (response.data["state"] === "up") {
                 setCurrentConstellationState(true)
 
                 // 进行 timer 的创建
-                let timer = setInterval(()=>{
+                let timer = setInterval(() => {
                     getInstancePositions()
                 }, 1000)
 
                 // 进行 instanceTimer 的设置
                 setInstanceTimer(timer)
-            } else if(response.data["state"] === "down") {
+            } else if (response.data["state"] === "down") {
                 setCurrentConstellationState(false)
             } else {
                 message.error({
                     content: "unsupported constellation state"
                 })
             }
-        }, (error)=>{
+        }, (error) => {
             message.error({
                 content: "could not get the status from the backend server"
             })
         })
     }
 
-    function GetAvailableGroundStations(){
-        getAvailableGroundStations((response)=>{
+    function GetAvailableGroundStations() {
+        getAvailableGroundStations((response) => {
             let ground_stations = response.data["ground_stations"]
-            for(let i = 0; i < ground_stations.length; i++){
+            for (let i = 0; i < ground_stations.length; i++) {
                 let groundStationMap = ground_stations[i]
                 let groundStationInstance = {
                     name: groundStationMap["name"],
                     longitude: parseFloat(groundStationMap["longitude"]),
                     latitude: parseFloat(groundStationMap["latitude"]),
                 }
-                setAvailableGroundStations(prevAvailableGroundStations=>{
+                setAvailableGroundStations(prevAvailableGroundStations => {
                     return [...prevAvailableGroundStations, groundStationInstance]
+                })
+                setAvailableGroundStationsMapping(prevAvailableGroundStationsMapping => {
+                    return {
+                        ...prevAvailableGroundStationsMapping,
+                        [groundStationInstance["name"]]: groundStationInstance
+                    }
                 })
             }
             // 许可进入组件初始化的第二步
             setAlreadyGetPosition(1)
-        }, (error)=>{
+        }, (error) => {
             message.error({
                 content: "cannot retrieve available ground_stations"
             })
@@ -183,14 +223,15 @@ export function Constellation(props) {
 
     // 8. 组件初始化第二步 -> 将获取到的可选地面站的列表放到图中
     // ---------------------------------------------------------------------------------------------
-    useEffect(()=>{
-        if(1 === alreadyGetPosition){
+    useEffect(() => {
+        if (1 === alreadyGetPosition) {
             let positions = []
-            console.log(availableGroundStations)
             for (let index in availableGroundStations) {
                 let availableGroundStation = availableGroundStations[index]
+                // Entity 的 id 属性是为了进行 getById 的唯一的查找
                 let position = (
                     <Entity
+                        id={availableGroundStation.name}
                         key={availableGroundStation.name}
                         name={availableGroundStation.name}
                         description={availableGroundStation.name}
@@ -224,34 +265,103 @@ export function Constellation(props) {
     // 9. 获取卫星位置的函数
     // ---------------------------------------------------------------------------------------------
     function getInstancePositions() {
-        getInstancePositionsRequest((response)=>{
+        getInstancePositionsRequest((response) => {
             let positions = []
             let links = []
+
+            // 进行节点的放置
+            // --------------------------------------------------------------------
             for (let containerName in response.data.positions) {
-                let position = (
-                    <Entity
-                        key={containerName}
-                        name={containerName}
-                        description={containerName}
-                        position={Cartesian3.fromRadians(
-                            response.data.positions[containerName]["longitude"],
-                            response.data.positions[containerName]["latitude"],
-                            response.data.positions[containerName]["altitude"],
-                        )}
-                    >
-                        <PointGraphics pixelSize={10}/>
-                    </Entity>
-                )
+                // Entity 的 id 属性是为了进行 getById 的唯一的查找
+                let position = undefined
+                // 进行节点类型名的获取
+                let typeName = response.data.positions[containerName]["node_type"]
+                if ("NormalSatellite" === typeName) {
+                    // 如果是卫星
+                    position = (
+                        <Entity
+                            id={containerName}
+                            key={containerName}
+                            name={containerName}
+                            description={containerName}
+                            position={Cartesian3.fromRadians(
+                                response.data.positions[containerName]["longitude"],
+                                response.data.positions[containerName]["latitude"],
+                                response.data.positions[containerName]["altitude"],
+                            )}
+                        >
+                            <PointGraphics pixelSize={10}/>
+                        </Entity>
+                    )
+                } else {
+                    // 如果是地面站
+                    position = (
+                        <Entity
+                            id={containerName}
+                            key={containerName}
+                            name={containerName}
+                            description={containerName}
+                            position={Cartesian3.fromRadians(
+                                response.data.positions[containerName]["longitude"],
+                                response.data.positions[containerName]["latitude"],
+                                response.data.positions[containerName]["altitude"]
+                            )}
+                        >
+                            {/*<PointGraphics pixelSize={10}/>*/}
+                            <BoxGraphics
+                                dimensions={new Cesium.Cartesian3(100000, 100000, 100000)} // 长、宽、高均为 100000 米
+                                material={Cesium.Color.GREEN.withAlpha(1)}     // 颜色和透明度, 注意当一开始没有任何地面站被选中, 所以地面站的颜色为红色
+                                outline={true}                                 // 显示边框
+                                outlineColor={Cesium.Color.BLACK} // 边框颜色
+                                fill={true} // 是否进行填充
+                            />
+                        </Entity>
+                    )
+                }
                 positions.push(position)
             }
 
-            if(positions.length === 0){
+            // 如果没有则进行返回
+            if (positions.length === 0) {
                 return
             }
+            // --------------------------------------------------------------------
 
-            for (let linkId in response.data.links) {
-                let sourceContainerName = response.data.links[linkId][0]
-                let targetContainerName = response.data.links[linkId][1]
+            // 进行链路的放置
+            // --------------------------------------------------------------------
+            // 进行星地链路的处理
+            for(let linkId in response.data.gsls) {
+                let sourceContainerName = response.data.gsls[linkId][0]
+                let targetContainerName = response.data.gsls[linkId][1]
+                let lineData = [
+                    response.data.positions[sourceContainerName]["longitude"],
+                    response.data.positions[sourceContainerName]["latitude"],
+                    response.data.positions[sourceContainerName]["altitude"],
+                    response.data.positions[targetContainerName]["longitude"],
+                    response.data.positions[targetContainerName]["latitude"],
+                    response.data.positions[targetContainerName]["altitude"],
+                ]
+                let GSL = (
+                    <Entity
+                        key={linkId + sourceContainerName + targetContainerName}
+                        name={linkId + sourceContainerName + targetContainerName}
+                        description={`source node ${sourceContainerName} <----> target node ${targetContainerName}`}
+                    >
+                        <PolylineGraphics
+                            positions={Cartesian3.fromRadiansArrayHeights(lineData)}
+                            material={Cesium.Color.ORANGE.withAlpha(1)}
+                        >
+                        </PolylineGraphics>
+                    </Entity>
+                )
+                links.push(GSL)
+            }
+
+
+            // 进行星间链路的处理
+            for (let linkId in response.data.isls) {
+                let sourceContainerName = response.data.isls[linkId][0]
+                let targetContainerName = response.data.isls[linkId][1]
                 let lineData = [
                     response.data.positions[sourceContainerName]["longitude"],
                     response.data.positions[sourceContainerName]["latitude"],
@@ -268,60 +378,77 @@ export function Constellation(props) {
                     >
                         <PolylineGraphics
                             positions={Cartesian3.fromRadiansArrayHeights(lineData)}
+                            material={Cesium.Color.GREEN.withAlpha(1)}
                         >
                         </PolylineGraphics>
                     </Entity>
                 )
                 links.push(link)
             }
+            // --------------------------------------------------------------------
 
             setAllInstancePositions(positions)
             setAllLinks(links)
-        }, (error)=>{
+        }, (error) => {
             console.log(error)
         })
     }
+
     // ---------------------------------------------------------------------------------------------
 
 
     // 10. 当提示框的ok按钮所对应的处理函数
     // ---------------------------------------------------------------------------------------------
-    function handlePromptOkCicked(){
+    function handlePromptOkCicked() {
         if (promptBoxType === promptBoxTypes.startConstellation) { // 处理 startConstellation
+            // 设置对话框进行显示
             setPromptBoxLoading(true)
+            // 创建出选择出来的地面站信息
+            let selectedGroundStationInstances = []
+            // 进行遍历将选择出来的实例找出来
+            for (let index in selectedGroundStations) {
+                let groundStationName = selectedGroundStations[index]
+                selectedGroundStationInstances.push(availableGroundStationsMapping[groundStationName])
+            }
+            // 进行参数的设置
             const params = {
-                orbit_number: orbitNumber,
-                satellite_per_orbit: satellitePerOrbit,
+                [orbitNumberFieldName[1]]: orbitNumber,
+                [satellitePerOrbitFieldName[1]]: satellitePerOrbit,
+                [groundStationsFieldName[1]]: selectedGroundStationInstances
             }
             // 进行实际的请求的发送
-            startConstellationRequest(params, (response)=>{
+            startConstellationRequest(params, (response) => {
+                // 说明已经成功启动了星座
                 message.success({
                     content: "successfully start the constellation"
                 })
+                // 设置当前星座的状态
                 setCurrentConstellationState(true)
+                // 去掉加载状态
                 setPromptBoxLoading(false)
+                // 进行对话框的关闭
                 setPromptBoxOpen(false)
-                // 这个时候再调用周期性进行获取的函数
-
                 // 进行 timer 的创建
-                let timer = setInterval(()=>{
+                let timer = setInterval(() => {
                     getInstancePositions()
                 }, 1000)
-
                 // 将其设置到 instanceTimer 之中
                 setInstanceTimer(timer)
-
-            }, (error)=>{
+            }, (error) => {
+                // 说明启动星座失败
                 message.error({
                     content: `start constellation error ${error}`
                 })
+                // 去掉对话框的加载状态
                 setPromptBoxLoading(false)
+                // 进行对话框的关闭
                 setPromptBoxOpen(false)
             })
-        } else if(promptBoxType === promptBoxTypes.stopConstellation) { // 处理 stopConstellation
+        } else if (promptBoxType === promptBoxTypes.stopConstellation) { // 处理 stopConstellation
+            // 设置对话框的显示
             setPromptBoxLoading(true)
             // 进行实际的请求的发送
-            stopConstellationRequest((response)=>{
+            stopConstellationRequest((response) => {
                 // 停止拓扑成功
                 message.success({
                     content: "successfully stop the constellation"
@@ -331,7 +458,7 @@ export function Constellation(props) {
                 setPromptBoxOpen(false)
 
                 // 进行周期性计时器的停止
-                if(instanceTimer){
+                if (instanceTimer) {
                     clearInterval(instanceTimer)
                 }
 
@@ -346,99 +473,112 @@ export function Constellation(props) {
                 setPromptBoxOpen(false)
 
                 // 进行周期性计时器的停止
-                if(instanceTimer){
+                if (instanceTimer) {
                     clearInterval(instanceTimer)
                 }
             })
-        } else if(promptBoxType === promptBoxTypes.addGroundStation) { // 处理添加 groundStation
-
-        }
-
-
-
-        else {
+        } else {
             console.error("unsupported prompt box type")
         }
     }
+
     // ---------------------------------------------------------------------------------------------
 
     // 11. 当点击提示框 cancel 按钮所对应的处理函数
     // ---------------------------------------------------------------------------------------------
-    function handlePromptCancelClicked(){
+    function handlePromptCancelClicked() {
         setPromptBoxOpen(false)
     }
+
     // ---------------------------------------------------------------------------------------------
 
     // 12. 验证失败所对应的处理函数
     // ---------------------------------------------------------------------------------------------
-    function onValidateStartConstellationFailed(){
+    function onValidateStartConstellationFailed() {
         setPromptBoxOpen(true)
         setPromptBoxTitle("start constellation failed")
         setPromptBoxText("please finish the selection of required arguments")
     }
+
     // ---------------------------------------------------------------------------------------------
 
     // 13. 验证成功开始发送消息
     // ---------------------------------------------------------------------------------------------
-    function onStartConstellationFinish(){
+    function onStartConstellationFinish() {
         setPromptBoxType(promptBoxTypes.startConstellation)
         let tableValues = [
             {
                 key: "1",
-                paramsDescription: orbitNumberField[0],
+                paramsDescription: orbitNumberFieldName[0],
                 paramsValue: orbitNumber,
             },
             {
                 key: "2",
-                paramsDescription: satellitePerOrbitField[0],
+                paramsDescription: satellitePerOrbitFieldName[0],
                 paramsValue: satellitePerOrbit,
             },
             {
                 key: "3",
-                paramsDescription: groundStationsField[0],
-                paramsValue: selectedGroundStations
+                paramsDescription: groundStationsFieldName[0],
+                paramsValue: selectedGroundStations.join(",")
             }
         ]
         setPromptBoxOpen(true)
-        setPromptBoxTitle("start constellation")
+        setPromptBoxTitle("启动星座")
         setPromptBoxText(
             <Table dataSource={tableValues} columns={tableColumns}></Table>
         )
     }
+
     // ---------------------------------------------------------------------------------------------
 
     // 14. 当表单内的内容发生变化的时候的对应的处理函数
     // ---------------------------------------------------------------------------------------------
-    function onStartConstellationValuesChange(changedValues){
+    function onStartConstellationValuesChange(changedValues) {
         // 实时更新轨道数量
-        if(orbitNumberField[1] in changedValues){
-            setOrbitNumber(changedValues[orbitNumberField[1]])
+        if (orbitNumberFieldName[0] in changedValues) {
+            setOrbitNumber(changedValues[orbitNumberFieldName[0]])
         }
         // 实时更新每轨道卫星数量
-        if(satellitePerOrbitField[1] in changedValues){
-            setSatellitePerOrbit(changedValues[satellitePerOrbitField[1]])
+        if (satellitePerOrbitFieldName[0] in changedValues) {
+            setSatellitePerOrbit(changedValues[satellitePerOrbitFieldName[0]])
         }
         // 实时更新选择的地面站
-        if(selectedGroundStations[1] in changedValues){
-            setSelectedGroundStations(changedValues[groundStationsField[1]])
+        if (groundStationsFieldName[0] in changedValues) {
+            // 进行 viewer 的获取
+            const viewer = viewerRef.current.cesiumElement
+            // 进行 state 的更新
+            setSelectedGroundStations(changedValues[groundStationsFieldName[0]])
+            // 进行所有的遍历
+            for (let index = 0; index < availableGroundStations.length; index++) {
+                // 进行名称的获取
+                let groundStationName = availableGroundStations[index].name
+                // 进行实体的获取
+                let entity = viewer.entities.getById(groundStationName)
+                // 判断是否在选择的列表之中
+                if (changedValues[groundStationsFieldName[0]].includes(groundStationName)) {
+                    // 如果在列表之中 -> 切换为绿色
+                    entity.box.material = Cesium.Color.GREEN.withAlpha(1)
+                } else {
+                    // 如果不在列表之中 -> 切换为红色
+                    entity.box.material = Cesium.Color.RED.withAlpha(1)
+                }
+            }
         }
     }
+
     // ---------------------------------------------------------------------------------------------
 
     // 15. stopConstellation 停止星座的回调函数
     // ---------------------------------------------------------------------------------------------
-    function stopConstellation(){
+    function stopConstellation() {
         setPromptBoxType(promptBoxTypes.stopConstellation)
         setPromptBoxOpen(true)
-        setPromptBoxTitle("stop constellation")
-        setPromptBoxText("please decide whether to stop the constellation")
+        setPromptBoxTitle("停止星座")
+        setPromptBoxText("请选择是否停止星座")
     }
-    // ---------------------------------------------------------------------------------------------
 
-    // 16. 当选择的地面站变化的时候的回调函数
-    function onSelectedGroundStationChange(selectedGroundStations){
-        console.log(selectedGroundStations)
-    }
+    // ---------------------------------------------------------------------------------------------
 
     // 17. 真实的前端界面
     // ---------------------------------------------------------------------------------------------
@@ -459,6 +599,7 @@ export function Constellation(props) {
             </Row>
             {/*第3行*/}
             <Form
+                form={startConstellationForm}
                 name={nameOfForm}
                 onFinishFailed={onValidateStartConstellationFailed}
                 onFinish={onStartConstellationFinish}
@@ -469,19 +610,24 @@ export function Constellation(props) {
                 wrapperCol={{
                     span: 18,
                 }}
+                initialValues={{
+                    [orbitNumberFieldName[0]]: orbitNumber,
+                    [satellitePerOrbitFieldName[0]]: satellitePerOrbit,
+                    [groundStationsFieldName[0]]: selectedGroundStations
+                }}
             >
                 <Row style={{marginBottom: "-25px"}}>
-                    <Col span={4}>
+                    <Col span={2}>
 
                     </Col>
-                    <Col span={12}>
+                    <Col span={14}>
                         <Row justify={"center"}>
                             {/*<Col span={6}></Col>*/}
                             <Col span={2}></Col>
                             <Col span={11} style={{textAlign: "center"}}>
                                 <Form.Item
-                                    label={orbitNumberField[0]}
-                                    name={orbitNumberField[1]}
+                                    label={orbitNumberFieldName[0]}
+                                    name={orbitNumberFieldName[0]}
                                     rules={[
                                         {
                                             required: true,
@@ -489,13 +635,13 @@ export function Constellation(props) {
                                         }
                                     ]}
                                 >
-                                    <InputNumber placeholder={orbitNumber} style={{width: "100%"}} changeOnWheel></InputNumber>
+                                    <InputNumber style={{width: "100%"}} changeOnWheel></InputNumber>
                                 </Form.Item>
                             </Col>
                             <Col span={11} style={{textAlign: "center"}}>
                                 <Form.Item
-                                    label={satellitePerOrbitField[0]} // 在表单前面的内容
-                                    name={satellitePerOrbitField[1]}
+                                    label={satellitePerOrbitFieldName[0]} // 在表单前面的内容
+                                    name={satellitePerOrbitFieldName[0]}
                                     rules={[
                                         {
                                             required: true,
@@ -503,7 +649,7 @@ export function Constellation(props) {
                                         }
                                     ]}
                                 >
-                                    <InputNumber placeholder={satellitePerOrbit} style={{width: "100%"}} changeOnWheel></InputNumber>
+                                    <InputNumber style={{width: "100%"}} changeOnWheel></InputNumber>
                                 </Form.Item>
                             </Col>
 
@@ -517,8 +663,8 @@ export function Constellation(props) {
                             </Col>
                             <Col span={22}>
                                 <Form.Item
-                                    label={groundStationsField[0]}
-                                    name={groundStationsField[1]}
+                                    label={groundStationsFieldName[0]}
+                                    name={groundStationsFieldName[0]}
                                     labelCol={{
                                         span: 3,
                                     }}
@@ -529,10 +675,8 @@ export function Constellation(props) {
                                     <Select
                                         mode="multiple"
                                         allowClear={true}
-                                        style={{width:'100%'}}
-                                        placehold={"请选择想要添加的地面站"}
-                                        onChange={onSelectedGroundStationChange}
-                                        options={availableGroundStations.map(availableGroundStation=>({
+                                        style={{width: '100%'}}
+                                        options={availableGroundStations.map((availableGroundStation) => ({
                                             label: availableGroundStation.name,
                                             value: availableGroundStation.name,
                                         }))}
@@ -545,20 +689,22 @@ export function Constellation(props) {
                     <Col span={4}>
                         <Row justify={"center"} style={{width: "100%", height: "50%"}}>
                             <Col span={24} style={{textAlign: "center"}}>
-                                <Button type={"primary"} htmlType={"submit"} disabled={currentConstellationState} style={{width: "80%"}}>
+                                <Button type={"primary"} htmlType={"submit"} disabled={currentConstellationState}
+                                        style={{width: "80%"}}>
                                     启动星座
                                 </Button>
                             </Col>
                         </Row>
                         <Row>
                             <Col span={24} style={{textAlign: "center", height: "50%"}}>
-                                <Button type={"primary"} danger style={{width:"80%"}} disabled={!currentConstellationState} onClick={stopConstellation}>
+                                <Button type={"primary"} danger style={{width: "80%"}}
+                                        disabled={!currentConstellationState} onClick={stopConstellation}>
                                     销毁星座
                                 </Button>
                             </Col>
                         </Row>
                     </Col>
-                    <Col span={4}>
+                    <Col span={2}>
 
                     </Col>
                 </Row>
@@ -574,7 +720,9 @@ export function Constellation(props) {
             </Row>
             <Card>
                 <Row span={24}>
-                    <Viewer ref={viewerRef} style={{height: "60.4vh", width: "100%"}} timeline={false} homeButton={false} geocoder={false} animation={false} navigationHelpButton={false} fullscreenButton={false}>
+                    <Viewer ref={viewerRef} style={{height: "60.4vh", width: "100%"}} timeline={false}
+                            homeButton={false} geocoder={false} animation={false} navigationHelpButton={false}
+                            fullscreenButton={false}>
                         {allInstancePositions}
                         {allLinks}
                     </Viewer>
