@@ -1,8 +1,9 @@
 import React, {useEffect, useRef, useState} from "react";
-import {Button, Card, Col, Divider, Form, message, Modal, Row, Select, Table} from "antd";
+import {Button, Card, Col, Divider, Form, message, Modal, Row, Select, Slider, Table} from "antd";
 import {InputNumber} from "antd/lib";
 import {BoxGraphics, Entity, PointGraphics, PolylineGraphics, Viewer} from "resium";
 import {
+    changeTimeStepRequest,
     getAvailableGroundStations,
     getConstellationStateRequest,
     getInstancePositionsRequest,
@@ -26,6 +27,7 @@ export function Constellation(props) {
     const orbitNumberFieldName = ["轨道数量", "orbit_number"]
     const satellitePerOrbitFieldName = ["每轨道卫星数量", "satellite_per_orbit"]
     const groundStationsFieldName = ["地面站列表", "ground_stations"]
+    const timeStepFieldName = ["步长", "time_step"]
     const firstSplitContent = "配置面板"
     const secondSplitContent = "可视化界面"
     // ---------------------------------------------------------------------------------------------
@@ -54,6 +56,7 @@ export function Constellation(props) {
     const [availableGroundStations, setAvailableGroundStations] = useState([])
     const [availableGroundStationsMapping, setAvailableGroundStationsMapping] = useState({})
     const [selectedGroundStations, setSelectedGroundStations] = useState([])
+    const [selectedTimeStep, setSelectedTimestep] = useState(1)
     // ---------------------------------------------------------------------------------------------
 
     // 4.提示框的内容
@@ -95,6 +98,9 @@ export function Constellation(props) {
     // 8. 组件初始化第一步 -> 进行星座状态的获取, 以及可选的地面站的获取
     // ---------------------------------------------------------------------------------------------
     useEffect(() => {
+        Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyNDZmZTBmNi01NDgyLTRjMzgtYmMwZi1hNWMxZTEzOWNmZTYiLCJpZCI6OTgwOTMsImlhdCI6MTc0MDAzOTUyNn0.04t7gl4vt3qHqWdaIeCDYgcNAotnxx8W3xTiTyJ_QBU"
+
+
         // 在刚开始的时候进行星座状态的获取
         GetConstellationState()
 
@@ -167,6 +173,21 @@ export function Constellation(props) {
     function GetConstellationState() {
         getConstellationStateRequest((response) => {
             if (response.data["state"] === "up") {
+                // 进行星座参数的打印
+                console.log(response.data["constellation_params"])
+                // 进行参数的获取
+                let orbitNumber = response.data["constellation_params"]["orbit_number"]
+                let satellitePerOrbit = response.data["constellation_params"]["satellite_per_orbit"]
+                let groundStations = response.data["constellation_params"]["ground_stations"]
+                startConstellationForm.setFieldsValue({
+                    "轨道数量": orbitNumber,
+                    "每轨道卫星数量": satellitePerOrbit,
+                    "地面站列表": groundStations
+                })
+                setOrbitNumber(orbitNumber)
+                setSatellitePerOrbit(satellitePerOrbit)
+                setSelectedGroundStations(groundStations)
+
                 setCurrentConstellationState(true)
 
                 // 进行 timer 的创建
@@ -241,7 +262,6 @@ export function Constellation(props) {
                             0,
                         )}
                     >
-
                         <BoxGraphics
                             dimensions={new Cesium.Cartesian3(100000, 100000, 100000)} // 长、宽、高均为 10 米
                             material={Cesium.Color.RED.withAlpha(1)}     // 颜色和透明度, 注意当一开始没有任何地面站被选中, 所以地面站的颜色为红色
@@ -350,6 +370,7 @@ export function Constellation(props) {
                         <PolylineGraphics
                             positions={Cartesian3.fromRadiansArrayHeights(lineData)}
                             material={Cesium.Color.ORANGE.withAlpha(1)}
+                            arcType={Cesium.ArcType.NONE} // 确保设置为 NONE
                         >
                         </PolylineGraphics>
                     </Entity>
@@ -414,7 +435,8 @@ export function Constellation(props) {
             const params = {
                 [orbitNumberFieldName[1]]: orbitNumber,
                 [satellitePerOrbitFieldName[1]]: satellitePerOrbit,
-                [groundStationsFieldName[1]]: selectedGroundStationInstances
+                [groundStationsFieldName[1]]: selectedGroundStationInstances,
+                [timeStepFieldName[1]]: selectedTimeStep
             }
             // 进行实际的请求的发送
             startConstellationRequest(params, (response) => {
@@ -521,6 +543,11 @@ export function Constellation(props) {
                 key: "3",
                 paramsDescription: groundStationsFieldName[0],
                 paramsValue: selectedGroundStations.join(",")
+            },
+            {
+                key: "4",
+                paramsDescription: timeStepFieldName[0],
+                paramsValue: selectedTimeStep
             }
         ]
         setPromptBoxOpen(true)
@@ -565,6 +592,17 @@ export function Constellation(props) {
                 }
             }
         }
+        // 实时更新选择的步长
+        if(timeStepFieldName[0] in changedValues) {
+            let changedTimeStamp = changedValues[timeStepFieldName[0]]
+            // 进行 state 的设置
+            setSelectedTimestep(changedTimeStamp)
+            // 当星座启动之后才可以通过这种方式进行调整
+            if (currentConstellationState){
+                // 进行请求的发送
+                changeTimeStep(changedTimeStamp)
+            }
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -580,12 +618,28 @@ export function Constellation(props) {
 
     // ---------------------------------------------------------------------------------------------
 
+    // 16. 当选择的步长变更的时候需要调用的函数
+    function changeTimeStep(changedTimeStamp){
+        const params = {
+            [timeStepFieldName[1]]: changedTimeStamp
+        }
+        changeTimeStepRequest(params, (response)=>{
+            message.success({
+                content: `successfully change the time step to ${changedTimeStamp}`
+            })
+        }, (error)=>{
+            message.error({
+                content: "could not change the time step"
+            })
+        })
+    }
+
     // 17. 真实的前端界面
     // ---------------------------------------------------------------------------------------------
     return (
         <div>
             {/*第1行*/}
-            <Row style={{height: "30px"}}>
+            <Row style={{height: "10px"}}>
 
             </Row>
             <Row>
@@ -616,7 +670,7 @@ export function Constellation(props) {
                     [groundStationsFieldName[0]]: selectedGroundStations
                 }}
             >
-                <Row style={{marginBottom: "-25px"}}>
+                <Row>
                     <Col span={2}>
 
                     </Col>
@@ -635,7 +689,7 @@ export function Constellation(props) {
                                         }
                                     ]}
                                 >
-                                    <InputNumber style={{width: "100%"}} changeOnWheel></InputNumber>
+                                    <InputNumber disabled={currentConstellationState} style={{width: "100%"}} changeOnWheel></InputNumber>
                                 </Form.Item>
                             </Col>
                             <Col span={11} style={{textAlign: "center"}}>
@@ -649,7 +703,7 @@ export function Constellation(props) {
                                         }
                                     ]}
                                 >
-                                    <InputNumber style={{width: "100%"}} changeOnWheel></InputNumber>
+                                    <InputNumber disabled={currentConstellationState} style={{width: "100%"}} changeOnWheel></InputNumber>
                                 </Form.Item>
                             </Col>
 
@@ -676,6 +730,7 @@ export function Constellation(props) {
                                         mode="multiple"
                                         allowClear={true}
                                         style={{width: '100%'}}
+                                        disabled={currentConstellationState}
                                         options={availableGroundStations.map((availableGroundStation) => ({
                                             label: availableGroundStation.name,
                                             value: availableGroundStation.name,
@@ -708,6 +763,55 @@ export function Constellation(props) {
 
                     </Col>
                 </Row>
+                <Row style={{marginBottom: "-25px"}}>
+                    <Col span={2}></Col>
+                    <Col span={14}>
+                        <Row>
+                            <Col span={2}></Col>
+                            <Col span={22}>
+                                <Form.Item
+                                    label={timeStepFieldName[0]}
+                                    name={timeStepFieldName[0]}
+                                    labelCol={{
+                                        span: 3,
+                                    }}
+                                    wrapperCol={{
+                                        span: 21,
+                                    }}
+                                >
+                                    <Slider
+                                        min={1}
+                                        max={20}
+                                        value={typeof selectedTimeStep === 'number' ? selectedTimeStep : 0}
+                                    />
+                                </Form.Item>
+                            </Col>
+                        </Row>
+                    </Col>
+                    <Col span={4}>
+                        <Row justify={"center"} style={{width: "100%", height: "50%"}}>
+                            {/*<Button style={{width: "80%"}}>*/}
+                            {/*    test*/}
+                            {/*</Button>*/}
+                            <InputNumber
+                                min={1}
+                                max={20}
+                                style={{width: "80%"}}
+                                value={selectedTimeStep}
+                                onChange={(value)=>{
+                                    setSelectedTimestep(value)
+                                    startConstellationForm.setFieldsValue({
+                                        "步长": value
+                                    })
+                                }}
+                            >
+                            </InputNumber>
+                        </Row>
+                    </Col>
+                    <Col span={2}>
+
+                    </Col>
+                </Row>
             </Form>
             <Row>
                 <Divider
@@ -720,7 +824,7 @@ export function Constellation(props) {
             </Row>
             <Card>
                 <Row span={24}>
-                    <Viewer ref={viewerRef} style={{height: "60.4vh", width: "100%"}} timeline={false}
+                    <Viewer ref={viewerRef} style={{height: "57vh", width: "100%"}} timeline={false}
                             homeButton={false} geocoder={false} animation={false} navigationHelpButton={false}
                             fullscreenButton={false}>
                         {allInstancePositions}
