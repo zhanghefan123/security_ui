@@ -10,8 +10,8 @@ import {
     startConstellationRequest,
     stopConstellationRequest
 } from "../requests/constellation";
-import {Cartesian3, ScreenSpaceEventHandler, ScreenSpaceEventType} from "cesium";
 import * as Cesium from "cesium";
+import {Cartesian3, ScreenSpaceEventHandler, ScreenSpaceEventType, Transforms} from "cesium";
 import {ProForm} from "@ant-design/pro-components";
 
 // react for cesium 官方参考网址 https://resium.reearth.io/components/PointGraphics
@@ -30,6 +30,10 @@ export function Constellation(props) {
     const timeStepFieldName = ["步长", "time_step"]
     const firstSplitContent = "配置面板"
     const secondSplitContent = "可视化界面"
+
+    const ellipsoid = Cesium.Ellipsoid.WGS84;
+    const R_EARTH = ellipsoid.maximumRadius;
+    const MIN_ELEVATION_ANGLE = 5
     // ---------------------------------------------------------------------------------------------
 
     // 2. 表单结构
@@ -218,8 +222,8 @@ export function Constellation(props) {
                 let groundStationMap = ground_stations[i]
                 let groundStationInstance = {
                     name: groundStationMap["name"],
-                    longitude: parseFloat(groundStationMap["longitude"]),
-                    latitude: parseFloat(groundStationMap["latitude"]),
+                    longitude: parseFloat(groundStationMap["longitude"]) * (Math.PI / 180),
+                    latitude: parseFloat(groundStationMap["latitude"]) * (Math.PI / 180),
                 }
                 setAvailableGroundStations(prevAvailableGroundStations => {
                     return [...prevAvailableGroundStations, groundStationInstance]
@@ -269,10 +273,6 @@ export function Constellation(props) {
                             outlineColor={Cesium.Color.BLACK}
                             fill={true}
                         />
-                        {/*<PointGraphics*/}
-                        {/*    pixelSize={10}*/}
-                        {/*    color={Cesium.Color.RED.withAlpha(0.5)}*/}
-                        {/*/>*/}
                     </Entity>
                 )
                 positions.push(position)
@@ -296,23 +296,63 @@ export function Constellation(props) {
                 let position = undefined
                 // 进行节点类型名的获取
                 let typeName = response.data.positions[containerName]["node_type"]
+                // 进行经度, 纬度, 高度的获取
+                let longitude = response.data.positions[containerName]["longitude"]
+                let latitude = response.data.positions[containerName]["latitude"]
+                let altitude = response.data.positions[containerName]["altitude"]
+                console.log(`satellite altitude ${altitude}`)
                 if ("NormalSatellite" === typeName) {
                     // 如果是卫星
+
+                    // 首先构造一个卫星的位置
+                    let satellite_position = Cartesian3.fromRadians(
+                        longitude,
+                        latitude,
+                        altitude,
+                    )
+
+                    // 创建一个卫星点在指定的位置
                     position = (
                         <Entity
                             id={containerName}
                             key={containerName}
                             name={containerName}
                             description={containerName}
-                            position={Cartesian3.fromRadians(
-                                response.data.positions[containerName]["longitude"],
-                                response.data.positions[containerName]["latitude"],
-                                response.data.positions[containerName]["altitude"],
-                            )}
+                            position={satellite_position}
                         >
                             <PointGraphics pixelSize={10}/>
                         </Entity>
                     )
+
+                    // 这里补充卫星的投影 projection
+                    // --------------------------------------------------------------------
+                    let projection_height = calculate_projection_height(MIN_ELEVATION_ANGLE, altitude)
+                    let projection_bottom_radius = calculate_projection_bottom_radius(MIN_ELEVATION_ANGLE, altitude)
+                    let projection_position = Cartesian3.fromRadians(
+                        longitude,
+                        latitude,
+                        altitude - projection_height / 2
+                    )
+                    let orientation = Transforms.headingPitchRollQuaternion(
+                        satellite_position,
+                        Cesium.HeadingPitchRoll.fromDegrees(0, 0, 0) // 航向角、俯仰角、横滚角均为 0
+                    );
+                    let projection = <Entity
+                        position={projection_position}
+                        orientation={orientation}
+                        cylinder={{
+                            length: projection_height,
+                            topRadius: 0,
+                            bottomRadius: projection_bottom_radius,
+                            material: Cesium.Color.YELLOW.withAlpha(0.5),
+                            outline: false,
+                        }}
+                    >
+                    </Entity>
+                    // --------------------------------------------------------------------
+
+                    positions.push(projection)
+
                 } else {
                     // 如果是地面站
                     position = (
@@ -322,9 +362,9 @@ export function Constellation(props) {
                             name={containerName}
                             description={containerName}
                             position={Cartesian3.fromRadians(
-                                response.data.positions[containerName]["longitude"],
-                                response.data.positions[containerName]["latitude"],
-                                response.data.positions[containerName]["altitude"]
+                                longitude,
+                                latitude,
+                                altitude
                             )}
                         >
                             {/*<PointGraphics pixelSize={10}/>*/}
@@ -351,8 +391,12 @@ export function Constellation(props) {
             // --------------------------------------------------------------------
             // 进行星地链路的处理
             for(let linkId in response.data.gsls) {
+                console.log(response.data.gsls[linkId])
                 let sourceContainerName = response.data.gsls[linkId][0]
                 let targetContainerName = response.data.gsls[linkId][1]
+                if(targetContainerName === ""){
+                    continue
+                }
                 let lineData = [
                     response.data.positions[sourceContainerName]["longitude"],
                     response.data.positions[sourceContainerName]["latitude"],
@@ -375,6 +419,34 @@ export function Constellation(props) {
                         </PolylineGraphics>
                     </Entity>
                 )
+
+
+                // 下面的方法和 python 方法计算的结果基本一致, 那么只有可能是投影画错了
+                // ------------------------------------------------------------------------------------------------------------------
+                // let groundStationPosition = Cartesian3.fromRadians(
+                //     response.data.positions[sourceContainerName]["longitude"],
+                //     response.data.positions[sourceContainerName]["latitude"],
+                //     response.data.positions[sourceContainerName]["altitude"],
+                // )
+                //
+                // let satellitePosition = Cartesian3.fromRadians(
+                //     response.data.positions[targetContainerName]["longitude"],
+                //     response.data.positions[targetContainerName]["latitude"],
+                //     response.data.positions[targetContainerName]["altitude"],
+                // )
+                //
+                // var difference = Cesium.Cartesian3.subtract(satellitePosition, groundStationPosition, new Cesium.Cartesian3());
+                // difference = Cesium.Cartesian3.normalize(difference, new Cesium.Cartesian3());
+                //
+                // var surfaceNormal = Cesium.Cartesian3.normalize(groundStationPosition, new Cesium.Cartesian3());
+                //
+                // var dotProduct = Cesium.Cartesian3.dot(difference, surfaceNormal);
+                //
+                // var angle = 90 - Cesium.Math.toDegrees(Math.acos(dotProduct));
+                //
+                // console.log(`elevation angle = ${angle}`)
+                // ------------------------------------------------------------------------------------------------------------------
+
                 links.push(GSL)
             }
 
@@ -407,12 +479,30 @@ export function Constellation(props) {
                 links.push(link)
             }
             // --------------------------------------------------------------------
-
             setAllInstancePositions(positions)
             setAllLinks(links)
         }, (error) => {
             console.log(error)
         })
+    }
+
+
+    // 根据在 https://blog.csdn.net/White__River/article/details/129734813 之中的公式进行计算锥体的底部半径
+    // [1] minimum_support_elevation_degree 是最小支持的仰角
+    // [2] satellite_height 是卫星的高度
+    function calculate_projection_bottom_radius(minimum_support_elevation_degree, satellite_height){
+        let E_rad = (minimum_support_elevation_degree) * (Math.PI / 180);
+        let alpha_rad = Math.acos((R_EARTH / (R_EARTH + satellite_height)) * Math.cos(E_rad)) - E_rad
+        return R_EARTH * Math.sin(alpha_rad)
+    }
+
+    // 根据在 https://blog.csdn.net/White__River/article/details/129734813 之中的公式进行计算锥体的总高度
+    // [1] minimum_support_elevation_angle 是最小支持的仰角
+    // [2] satellite_height 是卫星的高度
+    function calculate_projection_height(minimum_support_elevation_degree, satellite_height){
+        let E_rad = (minimum_support_elevation_degree) * (Math.PI / 180);
+        let alpha_rad = Math.acos((R_EARTH / (R_EARTH + satellite_height)) * Math.cos(E_rad)) - E_rad
+        return R_EARTH + satellite_height - R_EARTH * Math.cos(alpha_rad)
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -633,6 +723,9 @@ export function Constellation(props) {
             })
         })
     }
+
+
+
 
     // 17. 真实的前端界面
     // ---------------------------------------------------------------------------------------------
