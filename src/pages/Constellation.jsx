@@ -28,6 +28,7 @@ export function Constellation(props) {
     const satellitePerOrbitFieldName = ["每轨道卫星数量", "satellite_per_orbit"]
     const groundStationsFieldName = ["地面站列表", "ground_stations"]
     const timeStepFieldName = ["步长", "time_step"]
+    const minimumElevationAngleFieldName = ["最小仰角", "minimum_elevation_angle"]
     const firstSplitContent = "配置面板"
     const secondSplitContent = "可视化界面"
 
@@ -61,6 +62,7 @@ export function Constellation(props) {
     const [availableGroundStationsMapping, setAvailableGroundStationsMapping] = useState({})
     const [selectedGroundStations, setSelectedGroundStations] = useState([])
     const [selectedTimeStep, setSelectedTimestep] = useState(1)
+    const [selectedMinimumElevationAngle, setSelectedMinimumElevationAngle] = useState(5)
     // ---------------------------------------------------------------------------------------------
 
     // 4.提示框的内容
@@ -183,15 +185,20 @@ export function Constellation(props) {
                 let orbitNumber = response.data["constellation_params"]["orbit_number"]
                 let satellitePerOrbit = response.data["constellation_params"]["satellite_per_orbit"]
                 let groundStations = response.data["constellation_params"]["ground_stations"]
+                let minimumElevationAngle = response.data["constellation_params"]["minimum_elecvation_angle"]
+                let timeStep = response.data["constellation_params"]["time_step"]
                 startConstellationForm.setFieldsValue({
-                    "轨道数量": orbitNumber,
-                    "每轨道卫星数量": satellitePerOrbit,
-                    "地面站列表": groundStations
+                    [orbitNumberFieldName[0]]: orbitNumber,
+                    [satellitePerOrbitFieldName[0]]: satellitePerOrbit,
+                    [groundStationsFieldName[0]]: groundStations,
+                    [minimumElevationAngleFieldName[0]]: minimumElevationAngle,
+                    [timeStepFieldName[0]]: timeStep,
                 })
                 setOrbitNumber(orbitNumber)
                 setSatellitePerOrbit(satellitePerOrbit)
                 setSelectedGroundStations(groundStations)
-
+                setSelectedMinimumElevationAngle(minimumElevationAngle)
+                setSelectedTimestep(timeStep)
                 setCurrentConstellationState(true)
 
                 // 进行 timer 的创建
@@ -526,6 +533,7 @@ export function Constellation(props) {
                 [orbitNumberFieldName[1]]: orbitNumber,
                 [satellitePerOrbitFieldName[1]]: satellitePerOrbit,
                 [groundStationsFieldName[1]]: selectedGroundStationInstances,
+                [minimumElevationAngleFieldName[1]]: selectedMinimumElevationAngle,
                 [timeStepFieldName[1]]: selectedTimeStep
             }
             // 进行实际的请求的发送
@@ -636,6 +644,11 @@ export function Constellation(props) {
             },
             {
                 key: "4",
+                paramsDescription: minimumElevationAngleFieldName[0],
+                paramsValue: selectedMinimumElevationAngle
+            },
+            {
+                key: "5",
                 paramsDescription: timeStepFieldName[0],
                 paramsValue: selectedTimeStep
             }
@@ -681,6 +694,10 @@ export function Constellation(props) {
                     entity.box.material = Cesium.Color.RED.withAlpha(1)
                 }
             }
+        }
+        // 更新选择的仰角
+        if(minimumElevationAngleFieldName[0] in changedValues) {
+            setSelectedMinimumElevationAngle(changedValues[minimumElevationAngleFieldName[0]])
         }
         // 实时更新选择的步长
         if(timeStepFieldName[0] in changedValues) {
@@ -760,7 +777,9 @@ export function Constellation(props) {
                 initialValues={{
                     [orbitNumberFieldName[0]]: orbitNumber,
                     [satellitePerOrbitFieldName[0]]: satellitePerOrbit,
-                    [groundStationsFieldName[0]]: selectedGroundStations
+                    [groundStationsFieldName[0]]: selectedGroundStations,
+                    [minimumElevationAngleFieldName[0]]: selectedMinimumElevationAngle,
+                    [timeStepFieldName[0]]: selectedTimeStep,
                 }}
             >
                 <Row>
@@ -861,7 +880,21 @@ export function Constellation(props) {
                     <Col span={14}>
                         <Row>
                             <Col span={2}></Col>
-                            <Col span={22}>
+                            <Col span={11}>
+                                <Form.Item
+                                    label={minimumElevationAngleFieldName[0]}
+                                    name={minimumElevationAngleFieldName[0]}
+                                    labelCol={{
+                                        span: 6
+                                    }}
+                                    wrapperCol={{
+                                        span: 18
+                                    }}
+                                >
+                                    <InputNumber min={5} max={40} style={{width: "80%"}} value={selectedMinimumElevationAngle}/>
+                                </Form.Item>
+                            </Col>
+                            <Col span={11}>
                                 <Form.Item
                                     label={timeStepFieldName[0]}
                                     name={timeStepFieldName[0]}
@@ -883,9 +916,6 @@ export function Constellation(props) {
                     </Col>
                     <Col span={4}>
                         <Row justify={"center"} style={{width: "100%", height: "50%"}}>
-                            {/*<Button style={{width: "80%"}}>*/}
-                            {/*    test*/}
-                            {/*</Button>*/}
                             <InputNumber
                                 min={1}
                                 max={20}
