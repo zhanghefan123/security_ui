@@ -1,19 +1,26 @@
 import * as G6 from "@antv/g6";
 import React, {useEffect, useRef, useState} from "react";
-import {Button, Card, Col, Form, message, Modal, Row, Select, Table, Upload} from "antd";
+import {Button, Card, Col, Form, Input, message, Modal, Row, Select, Table, Upload} from "antd";
 import {Node} from "../entities/node"
 import {Link} from "../entities/link"
 import {
-    getDataCenterTopology, getPathValidationTopology,
+    getDataCenterTopology,
+    getPathValidationTopology,
     getTopologyState,
-    getWideAreaNetworkTopology, pageClose, startAttackRequest,
-    startTopology, startTxRateTest,
-    stopTopology, stopTxRateTest
+    getWideAreaNetworkTopology,
+    pageClose, saveTopologyRequest,
+    startAttackRequest,
+    startTopology,
+    startTxRateTest,
+    stopTopology,
+    stopTxRateTest, topologyDescriptionRequest
 } from "../requests/topology";
 import {InputNumber} from "antd/lib";
 import {ProForm} from "@ant-design/pro-components";
 import {UploadOutlined} from "@ant-design/icons";
 import ReactECharts from "echarts-for-react";
+import {setEnvironmentVariables} from "@craco/craco/dist/lib/features/dev-server/set-environment-variables";
+
 const {getLabelPosition, transform} = G6.Util;
 
 // 所有的网路节点的可能的类型
@@ -142,7 +149,7 @@ export function Topology(props) {
     // 4. 字段的中英文
     // ---------------------------------------------------------------------------------------------
     // 4.1 拓扑配置相关表单字段
-    const networkEnvironmentField = ["网络环境", "network_env"]
+    const networkTopologyField = ["网络环境", "network_env"]
     const blockchainTypeField = ["区块链类型", "blockchain_type"]
     const consensusTypeField = ["共识类型", "consensus_type"]
     const accessLinkBandwidthField = ["接入链路带宽", "接入链路带宽(mbps)"]
@@ -160,7 +167,7 @@ export function Topology(props) {
     const [selectedBlockchain, setSelectedBlockchain] = useState(blockchainTypes[0])
     const [availableConsensusTypes, setAvailableConsensusTypes] = useState(consensusTypes[blockchainTypes[0]])
     const [selectedConsensusType, setSelectedConsensusType] = useState(consensusTypes[blockchainTypes[0]][0])
-    const [selectedNetworkEnvironment, setSelectedNetworkEnvironment] = useState("自定义环境")
+    const [selectedNetworkTopology, setSelectedNetworkTopology] = useState("自定义拓扑")
     const [selectedAccessLinkBandwidth, setSelectedAccessLinkBandwidth] = useState(8)
     const [selectedConsensusNodeCpuLimit, setSelectedConsensusNodeCpuLimit] = useState(2)
     const [selectedConsensusNodeMemoryLimit, setSelectedConsensusNodeMemoryLimit] = useState(1024)
@@ -171,6 +178,9 @@ export function Topology(props) {
     const [selectedAttackNode, setSelectedAttackNode] = useState("")
     const [selectedAttackedNode, setSelectedAttackedNode] = useState("")
     const [selectedAttackDuration, setSelectedAttackDuration] = useState(1)
+    // 4.5 保存拓扑相关的字段
+    const [selectedTopologyName, setSelectedTopologyName] = useState("")
+    const [topologyOptions, setTopologyOptions] = useState([])
     // ---------------------------------------------------------------------------------------------
 
     // 5. 拓扑状态
@@ -297,6 +307,7 @@ export function Topology(props) {
         stopTopology: Symbol.for("stopTopology"),
         startAttack: Symbol.for("startAttack"),
         errorParameters: Symbol.for("errorParameters"),
+        saveTopology: Symbol.for("saveTopology")
     }
     // 12.2 提示框的各个属性
     const [promptBoxType, setPromptBoxType] = useState()
@@ -435,15 +446,19 @@ export function Topology(props) {
     useEffect(() => {
         if (createGraph === 1) {
             getTopologyState((response) => {
+                // 不管是 up 还是 down 都能够获取
+                let all_topology_names = response.data["all_topology_names"]
+                setTopologyOptionsWithTopologyNames(all_topology_names)
+
                 if (response.data["state"] === "up") {
                     startTopologyForm.setFieldsValue({
-                        "网络环境": response.data["topology_params"]["network_env"],
-                        "区块链类型": response.data["topology_params"]["blockchain_type"],
-                        "共识类型": response.data["topology_params"]["consensus_type"],
-                        "接入链路带宽": response.data["topology_params"]["access_link_bandwidth"],
-                        "共识节点CPU": response.data["topology_params"]["consensus_node_cpu"],
-                        "共识节点内存": response.data["topology_params"]["consensus_node_memory"],
-                        "共识线程数量": response.data["topology_params"]["consensus_thread_count"],
+                        [networkTopologyField[0]]: response.data["topology_params"]["network_env"],
+                        [blockchainTypeField[0]]: response.data["topology_params"]["blockchain_type"],
+                        [consensusTypeField[0]]: response.data["topology_params"]["consensus_type"],
+                        [accessLinkBandwidthField[0]]: response.data["topology_params"]["access_link_bandwidth"],
+                        [consensusNodeCpuField[0]]: response.data["topology_params"]["consensus_node_cpu"],
+                        [consensusNodeMemoryField[0]]: response.data["topology_params"]["consensus_node_memory"],
+                        [consensusThreadCountField[0]]: response.data["topology_params"]["consensus_thread_count"],
                     })
                     setCurrentTopologyState(true)
                     rebuildGraph(response.data["topology_params"], true)
@@ -489,7 +504,8 @@ export function Topology(props) {
         setConsensusNodes([])
         setChainMakerNodes([])
         setMaliciousNodes([])
-        setTotalNodesCount([])
+        setLirNodes([])
+        setTotalNodesCount(0)
     }
     // ---------------------------------------------------------------------------------------------
 
@@ -618,7 +634,7 @@ export function Topology(props) {
             })
             // 构建参数
             const params = {
-                network_env: selectedNetworkEnvironment,
+                network_env: selectedNetworkTopology,
                 blockchain_type: selectedBlockchain,
                 consensus_type: selectedConsensusType,
                 access_link_bandwidth: selectedAccessLinkBandwidth,
@@ -696,6 +712,32 @@ export function Topology(props) {
             })
         } else if (promptBoxType === promptBoxTypes.errorParameters) {
             setPromptBoxOpen(false)
+        } else if (promptBoxType === promptBoxTypes.saveTopology) {
+            setPromptBoxLoading(true)
+            // 进行所有的节点的信息的收集, 并上传到后端进行保存
+            let topologyDescription = collectTopologyInformation()
+            const params = {
+                "topology_name": selectedTopologyName,
+                "topology_description": topologyDescription,
+            }
+            saveTopologyRequest(params, (response)=>{
+                // response 可以顺带返回当前有什么拓扑, 然后进行更新
+                let all_topology_names = response.data["all_topology_names"]
+                setTopologyOptionsWithTopologyNames(all_topology_names)
+
+                // 说明已经成功进行了拓扑的保存
+                message.success({
+                    content: "successfully save the topology"
+                })
+                setPromptBoxOpen(false)
+                setPromptBoxLoading(false)
+            }, (error)=>{
+                message.error({
+                    content: "failed to save the topology"
+                })
+                setPromptBoxOpen(false)
+                setPromptBoxLoading(false)
+            })
         } else {
             console.log("unsupported promptBoxType")
         }
@@ -706,7 +748,76 @@ export function Topology(props) {
         setPromptBoxOpen(false)
     }
 
+    // 17.3 设置 options
+    function setTopologyOptionsWithTopologyNames(all_topology_names){
+        let topology_options = []
+        for (let index = 0; index < all_topology_names.length; index++) {
+            topology_options.push({
+                label: all_topology_names[index],
+                value: all_topology_names[index]
+            })
+        }
+        topology_options.push({
+            label: "自定义拓扑",
+            value: "自定义拓扑"
+        })
+
+        setTopologyOptions(topology_options)
+    }
+
     // ---------------------------------------------------------------------------------------------
+
+    // 18. 进行当前拓扑信息的收集
+    function collectTopologyInformation(){
+        // 节点map
+        let nodesMap = {}
+        // 节点列表
+        let nodesList = []
+        // 遍历所有的图节点
+        // -------------------------------------------------------------------
+        const graphNodes = graph.getNodes()
+        graphNodes.forEach((graphNode) => {
+            let nodeID = graphNode.getID()
+            let result = nodeID.split("_")
+            let x = graphNode._cfg.model.x
+            let y = graphNode._cfg.model.y
+            let node = new Node(Number(result[1]), result[0], x, y)
+            nodesMap[nodeID] = node
+            nodesList.push(node)
+        })
+        // -------------------------------------------------------------------
+
+        // 遍历所有的图边
+        // -------------------------------------------------------------------
+        let links = []
+        const graphEdges = graph.getEdges()
+        graphEdges.forEach((graphEdge) => {
+            let lineWidth = graphEdge._cfg.originStyle["edge-shape"].lineWidth
+            let lineType = ""
+            if (lineWidth === 2) {
+                lineType = "access"
+            } else if (lineWidth === 5) {
+                lineType = "backbone"
+            } else {
+                console.log("unsupported line type")
+            }
+            let graphSourceNodeID = graphEdge.getSource().getID()
+            let graphTargetNodeID = graphEdge.getTarget().getID()
+            let sourceNode = nodesMap[graphSourceNodeID]
+            let targetNode = nodesMap[graphTargetNodeID]
+            links.push(new Link(sourceNode, targetNode, lineType))
+        })
+        // -------------------------------------------------------------------
+
+        // 准备进行数据的发送
+        // -------------------------------------------------------------------
+        let data = {
+            "nodes": nodesList,
+            "links": links,
+        }
+        return JSON.stringify(data)
+        // -------------------------------------------------------------------
+    }
 
     // 18. 拓扑操作
     // ---------------------------------------------------------------------------------------------
@@ -949,8 +1060,8 @@ export function Topology(props) {
         let tableValues = [
             {
                 key: "1",
-                paramsDescription: networkEnvironmentField[0],
-                paramsValue: selectedNetworkEnvironment
+                paramsDescription: networkTopologyField[0],
+                paramsValue: selectedNetworkTopology
             },
             {
                 key: "2",
@@ -992,8 +1103,18 @@ export function Topology(props) {
 
     // 20.3 当拓扑的值改变的时候
     function onStartTopologyValuesChange(changedValues) {
-        if (networkEnvironmentField[0] in changedValues) {
-            setSelectedNetworkEnvironment(changedValues[networkEnvironmentField[0]]);
+        if (networkTopologyField[0] in changedValues) {
+            setSelectedNetworkTopology(changedValues[networkTopologyField[0]]);
+            // 向后端发送请求请求到拓扑名称 -> 所对应的实际拓扑描述
+            const params = {
+                "topology_name": changedValues[networkTopologyField[0]],
+            }
+            topologyDescriptionRequest(params, (response)=>{
+                message.success(`成功切换到 ${changedValues[networkTopologyField[0]]} 拓扑`)
+                rebuildGraph(JSON.parse(response.data["topology_description"]))
+            }, (error)=>{
+                message.error("切换拓扑失败")
+            })
         }
         if (blockchainTypeField[0] in changedValues) {
             setSelectedBlockchain(changedValues[blockchainTypeField[0]]);
@@ -1090,52 +1211,15 @@ export function Topology(props) {
     // ---------------------------------------------------------------------------------------------
     // 22.1 进行拓扑的保存
     function saveTopology() {
-        // 进行所有的节点的信息的收集
-        let nodesMap = {}
-        let nodesList = []
-        const graphNodes = graph.getNodes()
-        graphNodes.forEach((graphNode) => {
-            let nodeID = graphNode.getID()
-            let result = nodeID.split("_")
-            let x = graphNode._cfg.model.x
-            let y = graphNode._cfg.model.y
-            let node = new Node(Number(result[1]), result[0], x, y)
-            nodesMap[nodeID] = node
-            nodesList.push(node)
-        })
-        // 进行所有的边的信息的收集
-        let links = []
-        const graphEdges = graph.getEdges()
-        graphEdges.forEach((graphEdge) => {
-            let lineWidth = graphEdge._cfg.originStyle["edge-shape"].lineWidth
-            console.log(lineWidth)
-            let lineType = ""
-            if (lineWidth === 2) {
-                lineType = "access"
-            } else if (lineWidth === 5) {
-                lineType = "backbone"
-            } else {
-                console.log("unsupported line type")
-            }
-            let graphSourceNodeID = graphEdge.getSource().getID()
-            let graphTargetNodeID = graphEdge.getTarget().getID()
-            let sourceNode = nodesMap[graphSourceNodeID]
-            let targetNode = nodesMap[graphTargetNodeID]
-            links.push(new Link(sourceNode, targetNode, lineType))
-        })
-        let data = {
-            "nodes": nodesList,
-            "links": links,
-        }
-        let blob = new Blob([JSON.stringify(data)], {type: "application/json"})
-        let url = window.URL.createObjectURL(blob)
-        let link = document.createElement("a");
-        link.style.display = "none";
-        link.href = url
-        link.setAttribute("download", "topology.txt");
-        document.body.appendChild(link);
-        link.click()
-        document.body.removeChild(link);
+        // 设置弹出框的属性
+        setPromptBoxType(promptBoxTypes.saveTopology)
+        setPromptBoxOpen(true)
+        setPromptBoxTitle("保存拓扑")
+        setPromptBoxText(
+            <Input placeholder={"请输入保存的拓扑名称:"}
+                   onChange={(event)=>{setSelectedTopologyName(event.target.value)}}>
+            </Input>
+        )
     }
 
     // 22.2 加载拓扑
@@ -1164,50 +1248,56 @@ export function Topology(props) {
 
     // 23. 网络环境的变化所对应的回调函数
     // ---------------------------------------------------------------------------------------------
-    function onEnvironmentChange(selectedEnvironment) {
-        if (selectedEnvironment === "广域网环境") {
-            getWideAreaNetworkTopology((response) => {
-                rebuildGraph(response.data, false)
-                message.success({
-                    content: "成功切换到广域网环境"
-                })
-            }, (error) => {
-                message.error({
-                    content: "切换到广域网环境失败"
-                })
-            })
-        } else if (selectedEnvironment === "多播路径验证环境") {
-            getDataCenterTopology((response) => {
-                rebuildGraph(response.data, false)
-                message.success({
-                    content: "成功切换到多播路径验证环境"
-                })
-            }, (error) => {
-                message.error({
-                    content: "切换到多播路径验证环境失败"
-                })
-            })
-        } else if (selectedEnvironment === "路径验证环境") {
-            getPathValidationTopology((response) => {
-                rebuildGraph(response.data, false)
-                message.success({
-                    content: "成功切换到路径验证环境"
-                })
-            }, (error) => {
-                message.error({
-                    content: "切换到路径验证环境失败"
-                })
-            })
-        } else {
-            let emptyTopologyInfo = {
-                nodes: [],
-                links: []
-            }
-            rebuildGraph(emptyTopologyInfo, false)
-            message.success({
-                content: "成功切换到自定义环境"
-            })
-        }
+    function onTopologyChange(selectedTopology) {
+
+
+
+
+
+
+        // if (selectedTopology === "广域网环境") {
+        //     getWideAreaNetworkTopology((response) => {
+        //         rebuildGraph(response.data, false)
+        //         message.success({
+        //             content: "成功切换到广域网环境"
+        //         })
+        //     }, (error) => {
+        //         message.error({
+        //             content: "切换到广域网环境失败"
+        //         })
+        //     })
+        // } else if (selectedTopology === "多播路径验证环境") {
+        //     getDataCenterTopology((response) => {
+        //         rebuildGraph(response.data, false)
+        //         message.success({
+        //             content: "成功切换到多播路径验证环境"
+        //         })
+        //     }, (error) => {
+        //         message.error({
+        //             content: "切换到多播路径验证环境失败"
+        //         })
+        //     })
+        // } else if (selectedTopology === "路径验证环境") {
+        //     getPathValidationTopology((response) => {
+        //         rebuildGraph(response.data, false)
+        //         message.success({
+        //             content: "成功切换到路径验证环境"
+        //         })
+        //     }, (error) => {
+        //         message.error({
+        //             content: "切换到路径验证环境失败"
+        //         })
+        //     })
+        // } else {
+        //     let emptyTopologyInfo = {
+        //         nodes: [],
+        //         links: []
+        //     }
+        //     rebuildGraph(emptyTopologyInfo, false)
+        //     message.success({
+        //         content: "成功切换到自定义环境"
+        //     })
+        // }
     }
     // ---------------------------------------------------------------------------------------------
 
@@ -1353,7 +1443,7 @@ export function Topology(props) {
                                         span: 8,
                                     }}
                                     initialValues={{
-                                        [networkEnvironmentField[0]]: selectedNetworkEnvironment,
+                                        [networkTopologyField[0]]: selectedNetworkTopology,
                                         [blockchainTypeField[0]]: selectedBlockchain,
                                         [consensusTypeField[0]]: selectedConsensusType,
                                         [accessLinkBandwidthField[0]]: selectedAccessLinkBandwidth,
@@ -1366,8 +1456,8 @@ export function Topology(props) {
                                     <Row>
                                         <Col span={24}>
                                             <Form.Item
-                                                label={networkEnvironmentField[0]}
-                                                name={networkEnvironmentField[0]}
+                                                label={networkTopologyField[0]}
+                                                name={networkTopologyField[0]}
                                                 rules={[
                                                     {
                                                         required: true,
@@ -1384,27 +1474,9 @@ export function Topology(props) {
 
                                                 <Select
                                                     disabled={currentTopologyState}
-                                                    value={selectedNetworkEnvironment}
+                                                    value={selectedNetworkTopology}
                                                     style={{width: "100%"}}
-                                                    onChange={onEnvironmentChange}
-                                                    options={[
-                                                        {
-                                                            label: "广域网环境",
-                                                            value: "广域网环境",
-                                                        },
-                                                        {
-                                                            label: "多播路径验证环境",
-                                                            value: "多播路径验证环境",
-                                                        },
-                                                        {
-                                                            label: "路径验证环境",
-                                                            value: "路径验证环境",
-                                                        },
-                                                        {
-                                                            label: "自定义环境",
-                                                            value: "自定义环境",
-                                                        }
-                                                    ]}
+                                                    options={topologyOptions}
                                                 />
                                             </Form.Item>
                                         </Col>

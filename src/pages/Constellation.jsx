@@ -18,8 +18,10 @@ import {ProForm} from "@ant-design/pro-components";
 
 // Constellation 页面
 export function Constellation(props) {
-    // 对视图的引用
+    // 0. 对视图的引用
+    // ---------------------------------------------------------------------------------------------
     const viewerRef = useRef(null);
+    // ---------------------------------------------------------------------------------------------
 
     // 1. 常量的定义
     // ---------------------------------------------------------------------------------------------
@@ -31,7 +33,6 @@ export function Constellation(props) {
     const minimumElevationAngleFieldName = ["最小仰角", "minimum_elevation_angle"]
     const firstSplitContent = "配置面板"
     const secondSplitContent = "可视化界面"
-
     const ellipsoid = Cesium.Ellipsoid.WGS84;
     const R_EARTH = ellipsoid.maximumRadius;
     const MIN_ELEVATION_ANGLE = 5
@@ -101,11 +102,11 @@ export function Constellation(props) {
     const [alreadyGetPosition, setAlreadyGetPosition] = useState(0)
     // ---------------------------------------------------------------------------------------------
 
-    // 8. 组件初始化第一步 -> 进行星座状态的获取, 以及可选的地面站的获取
+    // 9. 组件初始化第一步 -> 进行星座状态的获取, 以及可选的地面站的获取
     // ---------------------------------------------------------------------------------------------
     useEffect(() => {
+        // 进行默认token的覆盖
         Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyNDZmZTBmNi01NDgyLTRjMzgtYmMwZi1hNWMxZTEzOWNmZTYiLCJpZCI6OTgwOTMsImlhdCI6MTc0MDAzOTUyNn0.04t7gl4vt3qHqWdaIeCDYgcNAotnxx8W3xTiTyJ_QBU"
-
 
         // 在刚开始的时候进行星座状态的获取
         GetConstellationState()
@@ -113,10 +114,8 @@ export function Constellation(props) {
         // 在刚开始的时候进行可选的地面站的获取
         GetAvailableGroundStations()
 
-        // 注册监听器 -> 这里进行延迟加载
-        setTimeout(() => {
-            registerHandler()
-        }, 50)
+        // 注册监听器 -> 这里进行延迟加载 -> 否则无法进行 viewer 的获取
+        RegisterHandler()
 
         // 卸载的时候触发的回调
         return () => {
@@ -126,53 +125,55 @@ export function Constellation(props) {
         }
     }, []);
 
-    // registerHandler 注册处理器
-    function registerHandler() {
-        const viewer = viewerRef.current.cesiumElement
-        const handler = new ScreenSpaceEventHandler(viewer.scene.canvas)
+    // RegisterHandler 注册处理器
+    function RegisterHandler() {
+        setTimeout(()=>{
+            const viewer = viewerRef.current.cesiumElement
+            const handler = new ScreenSpaceEventHandler(viewer.scene.canvas)
 
-        // 监听点击事件
-        handler.setInputAction((movement) => {
-            let pick = viewer.scene.pick(movement.position)
-            let entity = pick.id
-            // 如果是红色的话那么转为绿色
-            if (entity.box) {
-                if (Cesium.Color.equals(entity.box.material.color._value, Cesium.Color.RED)) {
-                    // 从红色转绿色, 将地面站添加到地面站列表之中
-                    entity.box.material = Cesium.Color.GREEN.withAlpha(1)
-                    // 进行state的更新
-                    setSelectedGroundStations(prevSelectedGroundStations => {
-                        startConstellationForm.setFieldsValue({
-                            "地面站列表": [...prevSelectedGroundStations, entity.name]
+            // 监听点击事件
+            handler.setInputAction((movement) => {
+                let pick = viewer.scene.pick(movement.position)
+                let entity = pick.id
+                // 如果是红色的话那么转为绿色
+                if (entity.box) {
+                    if (Cesium.Color.equals(entity.box.material.color._value, Cesium.Color.RED)) {
+                        // 从红色转绿色, 将地面站添加到地面站列表之中
+                        entity.box.material = Cesium.Color.GREEN.withAlpha(1)
+                        // 进行state的更新
+                        setSelectedGroundStations(prevSelectedGroundStations => {
+                            startConstellationForm.setFieldsValue({
+                                "地面站列表": [...prevSelectedGroundStations, entity.name]
+                            })
+                            return [...prevSelectedGroundStations, entity.name]
                         })
-                        return [...prevSelectedGroundStations, entity.name]
-                    })
-                } else {
-                    // 从绿色转红色, 将地面站从地面站列表之中移除
-                    entity.box.material = Cesium.Color.RED.withAlpha(1)
-                    // 进行 state 和表单内字段的更新
-                    setSelectedGroundStations(prevSelectedGroundStations => {
-                            // 找到相应的元素的位置
-                            let index = prevSelectedGroundStations.indexOf(entity.name)
-                            // 已经找到了相应的元素
-                            if (index > -1) {
-                                // 利用这个位置进行删除
-                                prevSelectedGroundStations.splice(index, 1)
-                                // 需要调用 react 自己的方法进行设置
-                                startConstellationForm.setFieldsValue({
-                                    "地面站列表": [...prevSelectedGroundStations]
-                                })
-                            } else { // 如果没有找到相应的元素则需要进行报错
-                                message.error({
-                                    content: "cannot find the ground station"
-                                })
+                    } else {
+                        // 从绿色转红色, 将地面站从地面站列表之中移除
+                        entity.box.material = Cesium.Color.RED.withAlpha(1)
+                        // 进行 state 和表单内字段的更新
+                        setSelectedGroundStations(prevSelectedGroundStations => {
+                                // 找到相应的元素的位置
+                                let index = prevSelectedGroundStations.indexOf(entity.name)
+                                // 已经找到了相应的元素
+                                if (index > -1) {
+                                    // 利用这个位置进行删除
+                                    prevSelectedGroundStations.splice(index, 1)
+                                    // 需要调用 react 自己的方法进行设置
+                                    startConstellationForm.setFieldsValue({
+                                        "地面站列表": [...prevSelectedGroundStations]
+                                    })
+                                } else { // 如果没有找到相应的元素则需要进行报错
+                                    message.error({
+                                        content: "cannot find the ground station"
+                                    })
+                                }
+                                return [...prevSelectedGroundStations]
                             }
-                            return [...prevSelectedGroundStations]
-                        }
-                    )
+                        )
+                    }
                 }
-            }
-        }, ScreenSpaceEventType.RIGHT_CLICK);
+            }, ScreenSpaceEventType.RIGHT_CLICK);
+        }, 50)
     }
 
     // 获取星座的状态
@@ -253,9 +254,10 @@ export function Constellation(props) {
 
     // ---------------------------------------------------------------------------------------------
 
-    // 8. 组件初始化第二步 -> 将获取到的可选地面站的列表放到图中
+    // 10. 组件初始化第二步 -> 将获取到的可选地面站的列表放到图中
     // ---------------------------------------------------------------------------------------------
     useEffect(() => {
+        // 已经进行了位置的获取, 即 availableGroundStations 之中是有值的
         if (1 === alreadyGetPosition) {
             let positions = []
             for (let index in availableGroundStations) {
@@ -289,43 +291,40 @@ export function Constellation(props) {
     }, [alreadyGetPosition])
     // ---------------------------------------------------------------------------------------------
 
-    // 9. 获取卫星位置的函数
+    // 11. 获取卫星位置的函数
     // ---------------------------------------------------------------------------------------------
     function getInstancePositions() {
         getInstancePositionsRequest((response) => {
-            let positions = []
+            let entities = []
             let links = []
 
             // 进行节点的放置
             // --------------------------------------------------------------------
             for (let containerName in response.data.positions) {
-                // Entity 的 id 属性是为了进行 getById 的唯一的查找
-                let position = undefined
+                // 最终创建出来的实体
+                let entity = undefined
                 // 进行节点类型名的获取
                 let typeName = response.data.positions[containerName]["node_type"]
                 // 进行经度, 纬度, 高度的获取
                 let longitude = response.data.positions[containerName]["longitude"]
                 let latitude = response.data.positions[containerName]["latitude"]
                 let altitude = response.data.positions[containerName]["altitude"]
-                console.log(`satellite altitude ${altitude}`)
-                if ("NormalSatellite" === typeName) {
-                    // 如果是卫星
-
-                    // 首先构造一个卫星的位置
-                    let satellite_position = Cartesian3.fromRadians(
-                        longitude,
-                        latitude,
-                        altitude,
-                    )
-
+                // 进行位置的构建
+                let position = Cartesian3.fromRadians(
+                    longitude,
+                    latitude,
+                    altitude
+                )
+                // 根据节点类型进行处理
+                if ("NormalSatellite" === typeName) { // 如果是卫星
                     // 创建一个卫星点在指定的位置
-                    position = (
+                    entity = (
                         <Entity
                             id={containerName}
                             key={containerName}
                             name={containerName}
                             description={containerName}
-                            position={satellite_position}
+                            position={position}
                         >
                             <PointGraphics pixelSize={10}/>
                         </Entity>
@@ -341,7 +340,7 @@ export function Constellation(props) {
                         altitude - projection_height / 2
                     )
                     let orientation = Transforms.headingPitchRollQuaternion(
-                        satellite_position,
+                        position,
                         Cesium.HeadingPitchRoll.fromDegrees(0, 0, 0) // 航向角、俯仰角、横滚角均为 0
                     );
                     let projection = <Entity
@@ -358,11 +357,11 @@ export function Constellation(props) {
                     </Entity>
                     // --------------------------------------------------------------------
 
-                    positions.push(projection)
+                    entities.push(projection)
 
                 } else {
                     // 如果是地面站
-                    position = (
+                    entity = (
                         <Entity
                             id={containerName}
                             key={containerName}
@@ -385,11 +384,11 @@ export function Constellation(props) {
                         </Entity>
                     )
                 }
-                positions.push(position)
+                entities.push(entity)
             }
 
             // 如果没有则进行返回
-            if (positions.length === 0) {
+            if (entities.length === 0) {
                 return
             }
             // --------------------------------------------------------------------
@@ -398,10 +397,10 @@ export function Constellation(props) {
             // --------------------------------------------------------------------
             // 进行星地链路的处理
             for(let linkId in response.data.gsls) {
-                console.log(response.data.gsls[linkId])
                 let sourceContainerName = response.data.gsls[linkId][0]
                 let targetContainerName = response.data.gsls[linkId][1]
                 if(targetContainerName === ""){
+                    console.log("target container name = empty")
                     continue
                 }
                 let lineData = [
@@ -486,7 +485,7 @@ export function Constellation(props) {
                 links.push(link)
             }
             // --------------------------------------------------------------------
-            setAllInstancePositions(positions)
+            setAllInstancePositions(entities)
             setAllLinks(links)
         }, (error) => {
             console.log(error)

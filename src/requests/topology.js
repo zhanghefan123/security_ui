@@ -10,6 +10,27 @@ const getManetTopologyUrl = "/topologies/path_validation_topology.txt"
 const startAttackRequestUrl = "startAttack"
 const startTxRateTestUrl = "startTxRateTest"
 const stopTxRateTestUrl = "stopTxRateTest"
+const saveTopologyUrl = "saveTopology"
+const getTopologyDescriptionUrl = "getTopologyDescription"
+
+// topologyDescriptionRequest 向后端发送请求获取详细的拓扑描述
+export const topologyDescriptionRequest = (params, response_callback, error_callback) => {
+    axios.post(`${UrlBase}/${getTopologyDescriptionUrl}`, params).then((response)=>{
+        response_callback(response)
+    }, (error)=>{
+        error_callback(error)
+    })
+}
+
+// saveTopology 进行拓扑的保存
+export const saveTopologyRequest = (params, response_callback, error_callback) => {
+    axios.post(`${UrlBase}/${saveTopologyUrl}`, params).then(response=>{
+        response_callback(response)
+    }, (error)=>{
+        error_callback(error)
+    })
+}
+
 
 // startToplogy 启动的时候的函数
 export const startTopology = (params, response_callback, error_callback) => {
