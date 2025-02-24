@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from "react";
-import {Button, Card, Col, Divider, Form, message, Modal, Row, Select, Slider, Table} from "antd";
+import {Button, Card, Col, Divider, Form, message, Modal, Row, Select, Slider, Switch, Table} from "antd";
 import {InputNumber} from "antd/lib";
 import {BoxGraphics, Entity, PointGraphics, PolylineGraphics, Viewer} from "resium";
 import {
@@ -893,7 +893,7 @@ export function Constellation(props) {
                                     <InputNumber min={5} max={40} style={{width: "80%"}} value={selectedMinimumElevationAngle}/>
                                 </Form.Item>
                             </Col>
-                            <Col span={11}>
+                            <Col span={6}>
                                 <Form.Item
                                     label={timeStepFieldName[0]}
                                     name={timeStepFieldName[0]}
@@ -911,6 +911,26 @@ export function Constellation(props) {
                                     />
                                 </Form.Item>
                             </Col>
+                            <Col span={5}>
+                                <Row justify={"center"} style={{width: "100%", height: "50%"}}>
+                                    <Form.Item
+                                        label={"卫星覆盖范围显示"}
+                                        name={"卫星覆盖范围显示"}
+                                        labelCol={{
+                                            span: 16,
+                                        }}
+                                        wrapperCol={{
+                                            span: 8,
+                                        }}
+                                    >
+
+                                        <Switch>
+
+                                        </Switch>
+                                    </Form.Item>
+                                </Row>
+                            </Col>
+
                         </Row>
                     </Col>
                     <Col span={4}>

@@ -194,6 +194,7 @@ export function Topology(props) {
     const [maliciousNodes, setMaliciousNodes] = useState([])
     const [lirNodes, setLirNodes] = useState([])
     const [totalNodesCount, setTotalNodesCount] = useState(0)
+    const [txRateTestStatus, setTxRateTestStatus] = useState(false)
     // ---------------------------------------------------------------------------------------------
 
     // 6. 图的引用
@@ -1310,6 +1311,7 @@ export function Topology(props) {
             message.success({
                 content: "开启共识成功"
             })
+            setTxRateTestStatus(true)
             let txRateTimerTmp = setInterval(() => {
                 startTxRateTest((response) => {
                     setTimeList(response.data["time_list"])
@@ -1323,6 +1325,7 @@ export function Topology(props) {
             message.error({
                 content: "开启共识失败"
             })
+            setTxRateTestStatus(false)
         })
     }
 
@@ -1334,6 +1337,7 @@ export function Topology(props) {
             message.success({
                 content: "成功停止共识"
             })
+            setTxRateTestStatus(false)
         }, (error) => {
             message.error({
                 content: "停止共识失败"
@@ -1832,7 +1836,9 @@ export function Topology(props) {
                                         <Button
                                             type={"primary"}
                                             style={{width: "100%"}}
-                                            onClick={startTxRateTestClicked}>
+                                            onClick={startTxRateTestClicked}
+                                            disabled={txRateTestStatus}
+                                        >
                                             开始共识
                                         </Button>
                                     </Col>
@@ -1843,6 +1849,7 @@ export function Topology(props) {
                                             style={{width: "100%"}}
                                             htmlType={"submit"}
                                             onClick={stopTxRateTestClicked}
+                                            disabled={!txRateTestStatus}
                                             danger>
                                             停止共识
                                         </Button>
