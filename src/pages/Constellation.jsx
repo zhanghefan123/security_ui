@@ -31,6 +31,7 @@ export function Constellation(props) {
     const groundStationsFieldName = ["地面站列表", "ground_stations"]
     const timeStepFieldName = ["步长", "time_step"]
     const minimumElevationAngleFieldName = ["最小仰角", "minimum_elevation_angle"]
+    const displayProjectionFieldName = ["显示覆盖范围", "display_projection"]
     const firstSplitContent = "配置面板"
     const secondSplitContent = "可视化界面"
     const ellipsoid = Cesium.Ellipsoid.WGS84;
@@ -64,6 +65,7 @@ export function Constellation(props) {
     const [selectedGroundStations, setSelectedGroundStations] = useState([])
     const [selectedTimeStep, setSelectedTimestep] = useState(1)
     const [selectedMinimumElevationAngle, setSelectedMinimumElevationAngle] = useState(5)
+    const [displayProjection, setDisplayProjection] = useState(false)
     // ---------------------------------------------------------------------------------------------
 
     // 4.提示框的内容
@@ -204,7 +206,7 @@ export function Constellation(props) {
 
                 // 进行 timer 的创建
                 let timer = setInterval(() => {
-                    getInstancePositions()
+                    getInstancePositions(displayProjection)
                 }, 1000)
 
                 // 进行 instanceTimer 的设置
@@ -293,7 +295,7 @@ export function Constellation(props) {
 
     // 11. 获取卫星位置的函数
     // ---------------------------------------------------------------------------------------------
-    function getInstancePositions() {
+    function getInstancePositions(displayProjectionOrNot) {
         getInstancePositionsRequest((response) => {
             let entities = []
             let links = []
@@ -332,32 +334,37 @@ export function Constellation(props) {
 
                     // 这里补充卫星的投影 projection
                     // --------------------------------------------------------------------
-                    let projection_height = calculate_projection_height(MIN_ELEVATION_ANGLE, altitude)
-                    let projection_bottom_radius = calculate_projection_bottom_radius(MIN_ELEVATION_ANGLE, altitude)
-                    let projection_position = Cartesian3.fromRadians(
-                        longitude,
-                        latitude,
-                        altitude - projection_height / 2
-                    )
-                    let orientation = Transforms.headingPitchRollQuaternion(
-                        position,
-                        Cesium.HeadingPitchRoll.fromDegrees(0, 0, 0) // 航向角、俯仰角、横滚角均为 0
-                    );
-                    let projection = <Entity
-                        position={projection_position}
-                        orientation={orientation}
-                        cylinder={{
-                            length: projection_height,
-                            topRadius: 0,
-                            bottomRadius: projection_bottom_radius,
-                            material: Cesium.Color.YELLOW.withAlpha(0.5),
-                            outline: false,
-                        }}
-                    >
-                    </Entity>
+                    if (displayProjectionOrNot){
+                        let projection_height = calculate_projection_height(selectedMinimumElevationAngle, altitude)
+                        let projection_bottom_radius = calculate_projection_bottom_radius(selectedMinimumElevationAngle, altitude)
+                        let projection_position = Cartesian3.fromRadians(
+                            longitude,
+                            latitude,
+                            altitude - projection_height / 2
+                        )
+                        let orientation = Transforms.headingPitchRollQuaternion(
+                            position,
+                            Cesium.HeadingPitchRoll.fromDegrees(0, 0, 0) // 航向角、俯仰角、横滚角均为 0
+                        );
+                        let projection = <Entity
+                            position={projection_position}
+                            orientation={orientation}
+                            cylinder={{
+                                length: projection_height,
+                                topRadius: 0,
+                                bottomRadius: projection_bottom_radius,
+                                material: Cesium.Color.YELLOW.withAlpha(0.5),
+                                outline: false,
+                            }}
+                        >
+                        </Entity>
+                        entities.push(projection)
+                    } else {
+                        console.log("not display projection")
+                    }
                     // --------------------------------------------------------------------
 
-                    entities.push(projection)
+
 
                 } else {
                     // 如果是地面站
@@ -400,7 +407,6 @@ export function Constellation(props) {
                 let sourceContainerName = response.data.gsls[linkId][0]
                 let targetContainerName = response.data.gsls[linkId][1]
                 if(targetContainerName === ""){
-                    console.log("target container name = empty")
                     continue
                 }
                 let lineData = [
@@ -461,6 +467,7 @@ export function Constellation(props) {
             for (let linkId in response.data.isls) {
                 let sourceContainerName = response.data.isls[linkId][0]
                 let targetContainerName = response.data.isls[linkId][1]
+                let linkType = response.data.isls[linkId][2]
                 let lineData = [
                     response.data.positions[sourceContainerName]["longitude"],
                     response.data.positions[sourceContainerName]["latitude"],
@@ -469,20 +476,39 @@ export function Constellation(props) {
                     response.data.positions[targetContainerName]["latitude"],
                     response.data.positions[targetContainerName]["altitude"],
                 ]
-                let link = (
-                    <Entity
-                        key={linkId + sourceContainerName + targetContainerName}
-                        name={linkId + sourceContainerName + targetContainerName}
-                        description={`source node ${sourceContainerName} <----> target node ${targetContainerName}`}
-                    >
-                        <PolylineGraphics
-                            positions={Cartesian3.fromRadiansArrayHeights(lineData)}
-                            material={Cesium.Color.GREEN.withAlpha(1)}
+                if(linkType === "intra_orbit"){
+                    let link = (
+                        <Entity
+                            key={linkId + sourceContainerName + targetContainerName}
+                            name={linkId + sourceContainerName + targetContainerName}
+                            description={`source node ${sourceContainerName} <----> target node ${targetContainerName}`}
                         >
-                        </PolylineGraphics>
-                    </Entity>
-                )
-                links.push(link)
+                            <PolylineGraphics
+                                positions={Cartesian3.fromRadiansArrayHeights(lineData)}
+                                material={Cesium.Color.GREEN.withAlpha(1)}
+                            >
+                            </PolylineGraphics>
+                        </Entity>
+                    )
+                    links.push(link)
+                } else if(linkType === "inter_orbit"){
+                    let link = (
+                        <Entity
+                            key={linkId + sourceContainerName + targetContainerName}
+                            name={linkId + sourceContainerName + targetContainerName}
+                            description={`source node ${sourceContainerName} <----> target node ${targetContainerName}`}
+                        >
+                            <PolylineGraphics
+                                positions={Cartesian3.fromRadiansArrayHeights(lineData)}
+                                material={Cesium.Color.BLUE.withAlpha(1)}
+                            >
+                            </PolylineGraphics>
+                        </Entity>
+                    )
+                    links.push(link)
+                } else {
+                    console.log("unsupported link type")
+                }
             }
             // --------------------------------------------------------------------
             setAllInstancePositions(entities)
@@ -533,7 +559,7 @@ export function Constellation(props) {
                 [satellitePerOrbitFieldName[1]]: satellitePerOrbit,
                 [groundStationsFieldName[1]]: selectedGroundStationInstances,
                 [minimumElevationAngleFieldName[1]]: selectedMinimumElevationAngle,
-                [timeStepFieldName[1]]: selectedTimeStep
+                [timeStepFieldName[1]]: selectedTimeStep,
             }
             // 进行实际的请求的发送
             startConstellationRequest(params, (response) => {
@@ -549,7 +575,7 @@ export function Constellation(props) {
                 setPromptBoxOpen(false)
                 // 进行 timer 的创建
                 let timer = setInterval(() => {
-                    getInstancePositions()
+                    getInstancePositions(displayProjection)
                 }, 1000)
                 // 将其设置到 instanceTimer 之中
                 setInstanceTimer(timer)
@@ -707,6 +733,18 @@ export function Constellation(props) {
             if (currentConstellationState){
                 // 进行请求的发送
                 changeTimeStep(changedTimeStamp)
+            }
+        }
+        // 更新选择是否显示卫星覆盖区域
+        if(displayProjectionFieldName[0] in changedValues){
+            console.log(`display projection changed to ${changedValues[displayProjectionFieldName[0]]}`)
+            setDisplayProjection(changedValues[displayProjectionFieldName[0]])
+            if(instanceTimer){
+                clearInterval(instanceTimer)
+                let timer = setInterval(() => {
+                    getInstancePositions(changedValues[displayProjectionFieldName[0]])
+                }, 1000)
+                setInstanceTimer(timer)
             }
         }
     }
@@ -914,8 +952,8 @@ export function Constellation(props) {
                             <Col span={5}>
                                 <Row justify={"center"} style={{width: "100%", height: "50%"}}>
                                     <Form.Item
-                                        label={"卫星覆盖范围显示"}
-                                        name={"卫星覆盖范围显示"}
+                                        label={displayProjectionFieldName[0]}
+                                        name={displayProjectionFieldName[0]}
                                         labelCol={{
                                             span: 16,
                                         }}
@@ -923,9 +961,7 @@ export function Constellation(props) {
                                             span: 8,
                                         }}
                                     >
-
-                                        <Switch>
-
+                                        <Switch value={displayProjection} onChange={(value)=>{setDisplayProjection(value)}} >
                                         </Switch>
                                     </Form.Item>
                                 </Row>

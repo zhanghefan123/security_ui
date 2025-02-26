@@ -12,6 +12,16 @@ const startTxRateTestUrl = "startTxRateTest"
 const stopTxRateTestUrl = "stopTxRateTest"
 const saveTopologyUrl = "saveTopology"
 const getTopologyDescriptionUrl = "getTopologyDescription"
+const changeStartDefenceUrl = "changeStartDefence"
+
+export const changeStartDefenceRequest = (params, response_callback, error_callback) => {
+    axios.post(`${UrlBase}/${changeStartDefenceUrl}`, params).then((response)=>{
+        response_callback(response)
+    },(error)=>{
+        error_callback(error)
+    })
+}
+
 
 // topologyDescriptionRequest 向后端发送请求获取详细的拓扑描述
 export const topologyDescriptionRequest = (params, response_callback, error_callback) => {

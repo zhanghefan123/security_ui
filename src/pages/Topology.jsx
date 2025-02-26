@@ -1,9 +1,10 @@
 import * as G6 from "@antv/g6";
 import React, {useEffect, useRef, useState} from "react";
-import {Button, Card, Col, Form, Input, message, Modal, Row, Select, Table, Upload} from "antd";
+import {Button, Card, Col, Form, Input, message, Modal, Row, Select, Switch, Table, Upload} from "antd";
 import {Node} from "../entities/node"
 import {Link} from "../entities/link"
 import {
+    changeStartDefenceRequest,
     getDataCenterTopology,
     getPathValidationTopology,
     getTopologyState,
@@ -181,6 +182,8 @@ export function Topology(props) {
     // 4.5 保存拓扑相关的字段
     const [selectedTopologyName, setSelectedTopologyName] = useState("")
     const [topologyOptions, setTopologyOptions] = useState([])
+    // 4.6 安全相关的字段
+    const [startDefence, setStartDefence] = useState(false)
     // ---------------------------------------------------------------------------------------------
 
     // 5. 拓扑状态
@@ -462,6 +465,7 @@ export function Topology(props) {
                         [consensusThreadCountField[0]]: response.data["topology_params"]["consensus_thread_count"],
                     })
                     setCurrentTopologyState(true)
+                    setStartDefence(response.data["topology_params"]["start_defence"])
                     rebuildGraph(response.data["topology_params"], true)
                 } else if (response.data["state"] === "down") {
                     setCurrentTopologyState(false)
@@ -644,6 +648,7 @@ export function Topology(props) {
                 consensus_thread_count: selectedConsensusThreadCount,
                 nodes: nodesList,
                 links: links,
+                start_defence: startDefence
             }
             // 调用函数
             startTopology(params, (response) => {
@@ -1093,6 +1098,11 @@ export function Topology(props) {
                 key: "7",
                 paramsDescription: consensusThreadCountField[0],
                 paramsValue: selectedConsensusThreadCount
+            },
+            {
+                key: "8",
+                paramsDescription: "开启防御",
+                paramsValue: startDefence
             }
         ]
         setPromptBoxOpen(true)
@@ -1118,7 +1128,18 @@ export function Topology(props) {
             })
         }
         if (blockchainTypeField[0] in changedValues) {
-            setSelectedBlockchain(changedValues[blockchainTypeField[0]]);
+            // 选择的区块链的值
+            let changedBlockChainType = changedValues[blockchainTypeField[0]]
+            // 设置选择的区块链
+            setSelectedBlockchain(changedBlockChainType);
+            // 设置共识协议的可选项
+            setAvailableConsensusTypes(consensusTypes[changedBlockChainType])
+            // 设置为可选项的第一个
+            startTopologyForm.setFieldsValue({
+                "共识类型": consensusTypes[changedBlockChainType][0]
+            })
+            // 将 state 也同样设置为可选项的第一个
+            setSelectedConsensusType(consensusTypes[changedBlockChainType][0])
         }
         if (consensusTypeField[0] in changedValues) {
             setSelectedConsensusType(changedValues[consensusTypeField[0]]);
@@ -1247,61 +1268,6 @@ export function Topology(props) {
     }
     // ---------------------------------------------------------------------------------------------
 
-    // 23. 网络环境的变化所对应的回调函数
-    // ---------------------------------------------------------------------------------------------
-    function onTopologyChange(selectedTopology) {
-
-
-
-
-
-
-        // if (selectedTopology === "广域网环境") {
-        //     getWideAreaNetworkTopology((response) => {
-        //         rebuildGraph(response.data, false)
-        //         message.success({
-        //             content: "成功切换到广域网环境"
-        //         })
-        //     }, (error) => {
-        //         message.error({
-        //             content: "切换到广域网环境失败"
-        //         })
-        //     })
-        // } else if (selectedTopology === "多播路径验证环境") {
-        //     getDataCenterTopology((response) => {
-        //         rebuildGraph(response.data, false)
-        //         message.success({
-        //             content: "成功切换到多播路径验证环境"
-        //         })
-        //     }, (error) => {
-        //         message.error({
-        //             content: "切换到多播路径验证环境失败"
-        //         })
-        //     })
-        // } else if (selectedTopology === "路径验证环境") {
-        //     getPathValidationTopology((response) => {
-        //         rebuildGraph(response.data, false)
-        //         message.success({
-        //             content: "成功切换到路径验证环境"
-        //         })
-        //     }, (error) => {
-        //         message.error({
-        //             content: "切换到路径验证环境失败"
-        //         })
-        //     })
-        // } else {
-        //     let emptyTopologyInfo = {
-        //         nodes: [],
-        //         links: []
-        //     }
-        //     rebuildGraph(emptyTopologyInfo, false)
-        //     message.success({
-        //         content: "成功切换到自定义环境"
-        //     })
-        // }
-    }
-    // ---------------------------------------------------------------------------------------------
-
     // 24. 开启共识和停止共识按钮的回调函数
     // ---------------------------------------------------------------------------------------------
     function startTxRateTestClicked() {
@@ -1331,18 +1297,49 @@ export function Topology(props) {
 
     function stopTxRateTestClicked() {
         stopTxRateTest((response) => {
+            // 进行计时器的停止
             if (txRateTimer) {
                 clearInterval(txRateTimer)
             }
+            // 成功停止共识
             message.success({
                 content: "成功停止共识"
             })
+            // 将 timeList 和 rateList 重新设置成为默认值
+            setTimeList([1,2,3])
+            setCurrentTps([1,2,3])
             setTxRateTestStatus(false)
         }, (error) => {
             message.error({
                 content: "停止共识失败"
             })
         })
+    }
+    // ---------------------------------------------------------------------------------------------
+
+
+    // 进行投票
+    // ---------------------------------------------------------------------------------------------
+    function onStartDefenceChange(value){
+        setStartDefence(value)
+        if (currentTopologyState) {
+            const params = {
+                "start_defence": value,
+            }
+            changeStartDefenceRequest(params, (response)=>{
+                if(value){
+                    message.success("成功开启防御措施")
+                } else {
+                    message.success("成功关闭防御措施")
+                }
+            }, (error)=>{
+                if(value){
+                    message.error("开启防御措施失败")
+                } else {
+                    message.error("关闭防御措施失败")
+                }
+            })
+        }
     }
     // ---------------------------------------------------------------------------------------------
 
@@ -1500,13 +1497,6 @@ export function Topology(props) {
                                                 <Select
                                                     disabled={currentTopologyState}
                                                     value={selectedBlockchain}
-                                                    onChange={(value) => {
-                                                        setSelectedBlockchain(value)
-                                                        setAvailableConsensusTypes(consensusTypes[value])
-                                                        startTopologyForm.setFieldsValue({
-                                                            "共识类型": consensusTypes[value][0]
-                                                        })
-                                                    }}
                                                     options={blockchainTypes.map((blockchainType) => ({
                                                         label: blockchainType,
                                                         value: blockchainType,
@@ -1529,12 +1519,9 @@ export function Topology(props) {
                                                 <Select
                                                     disabled={currentTopologyState}
                                                     value={selectedConsensusType}
-                                                    onChange={(value) => {
-                                                        setSelectedConsensusType(value)
-                                                    }}
-                                                    options={availableConsensusTypes.map((city) => ({
-                                                        label: city,
-                                                        value: city,
+                                                    options={availableConsensusTypes.map((consensus) => ({
+                                                        label: consensus,
+                                                        value: consensus,
                                                     }))}
                                                 />
                                             </Form.Item>
@@ -1730,9 +1717,6 @@ export function Topology(props) {
                                                 <Select
                                                     value={selectedAttackType}
                                                     disabled={currentAttackState}
-                                                    onChange={(value) => {
-                                                        setSelectedAttackType(value)
-                                                    }}
                                                     options={attackTypes.map((attackType) => ({
                                                         label: attackType,
                                                         value: attackType,
@@ -1755,9 +1739,6 @@ export function Topology(props) {
                                             >
                                                 <Select value={selectedAttackNode}
                                                         disabled={currentAttackState}
-                                                        onChange={(value) => {
-                                                            setSelectedAttackNode(value)
-                                                        }}
                                                         options={maliciousNodes.map((maliciousNode) => ({
                                                             label: maliciousNode,
                                                             value: maliciousNode,
@@ -1779,9 +1760,6 @@ export function Topology(props) {
                                                 ]}
                                             >
                                                 <Select value={selectedAttackedNode}
-                                                        onChange={(value) => {
-                                                            setSelectedAttackedNode(value)
-                                                        }}
                                                         disabled={currentAttackState}
                                                         options={chainMakerNodes.map((chainMakerNode) => ({
                                                             label: chainMakerNode,
@@ -1827,35 +1805,53 @@ export function Topology(props) {
                                 </Form>
                             </Card>
                             <Row style={{height: "0.6vh"}}></Row>
-                            <Card
-                                // size={"small"}
-                                title={"共识配置"}
-                            >
-                                <Row>
-                                    <Col span={11} style={{textAlign: "center"}}>
-                                        <Button
-                                            type={"primary"}
-                                            style={{width: "100%"}}
-                                            onClick={startTxRateTestClicked}
-                                            disabled={txRateTestStatus}
-                                        >
-                                            开始共识
-                                        </Button>
-                                    </Col>
-                                    <Col span={2}></Col>
-                                    <Col span={11}>
-                                        <Button
-                                            type={"primary"}
-                                            style={{width: "100%"}}
-                                            htmlType={"submit"}
-                                            onClick={stopTxRateTestClicked}
-                                            disabled={!txRateTestStatus}
-                                            danger>
-                                            停止共识
-                                        </Button>
-                                    </Col>
-                                </Row>
-                            </Card>
+                            <Row>
+                                <Col span={12}>
+                                    <Card
+                                        // size={"small"}
+                                        title={"共识配置"}
+                                    >
+                                        <Row>
+                                            <Col span={11} style={{textAlign: "center"}}>
+                                                <Button
+                                                    type={"primary"}
+                                                    style={{width: "100%"}}
+                                                    onClick={startTxRateTestClicked}
+                                                    disabled={txRateTestStatus}
+                                                >
+                                                    开始共识
+                                                </Button>
+                                            </Col>
+                                            <Col span={2}></Col>
+                                            <Col span={11}>
+                                                <Button
+                                                    type={"primary"}
+                                                    style={{width: "100%"}}
+                                                    htmlType={"submit"}
+                                                    onClick={stopTxRateTestClicked}
+                                                    disabled={!txRateTestStatus}
+                                                    danger>
+                                                    停止共识
+                                                </Button>
+                                            </Col>
+                                        </Row>
+                                    </Card>
+                                </Col>
+                                <Col span={12}>
+                                    <Card
+                                        title={"安全配置"}
+                                    >
+                                        <Row>
+                                            <Col span={2}></Col>
+                                            <Col span={20}>
+                                                <Switch value={startDefence} onChange={onStartDefenceChange} style={{width: "100%", marginTop: "10px"}}/>
+                                            </Col>
+                                            <Col span={2}></Col>
+                                        </Row>
+                                    </Card>
+                                </Col>
+                            </Row>
+
                         </Col>
                     </Row>
                     <Row style={{height: "1vh"}}></Row>
