@@ -5,10 +5,7 @@ import {Node} from "../entities/node"
 import {Link} from "../entities/link"
 import {
     changeStartDefenceRequest,
-    getDataCenterTopology,
-    getPathValidationTopology,
     getTopologyState,
-    getWideAreaNetworkTopology,
     pageClose, saveTopologyRequest,
     startAttackRequest,
     startTopology,
@@ -20,8 +17,6 @@ import {InputNumber} from "antd/lib";
 import {ProForm} from "@ant-design/pro-components";
 import {UploadOutlined} from "@ant-design/icons";
 import ReactECharts from "echarts-for-react";
-import {setEnvironmentVariables} from "@craco/craco/dist/lib/features/dev-server/set-environment-variables";
-
 const {getLabelPosition, transform} = G6.Util;
 
 // 所有的网路节点的可能的类型
@@ -110,6 +105,8 @@ export function Topology(props) {
         "ChainMakerNode",
         "MaliciousNode",
         "LirNode",
+        "FabricPeerNode",
+        "FabricOrderNode"
     ]
     // 2.2 链路类型
     const linkTypes = [
@@ -134,9 +131,9 @@ export function Topology(props) {
     // 2.4 区块链的类型
     const blockchainTypes = ["长安链", "以太坊", "fabric", "BIDL", "百度超级链"]
     const consensusTypes = {
-        "长安链": ["TBFT", "RAFT", "MAXBFT"],
+        "长安链": ["TBFT", "RAFT"],
         "以太坊": ["PoW", "PoS"],
-        "fabric": ["Mir-BFT", "BFT-SMaRt", "Raft"],
+        "fabric": ["BFT-SMaRt"],
         "BIDL": ["PBFT-并行", "PBFT-串行"],
         "百度超级链": ["TDPoS", "PoA"]
     }
@@ -196,6 +193,8 @@ export function Topology(props) {
     const [chainMakerNodes, setChainMakerNodes] = useState([])
     const [maliciousNodes, setMaliciousNodes] = useState([])
     const [lirNodes, setLirNodes] = useState([])
+    const [fabricPeerNodes, setFabricPeerNodes] = useState([])
+    const [fabricOrderNodes, setFabricOrderNodes] = useState([])
     const [totalNodesCount, setTotalNodesCount] = useState(0)
     const [txRateTestStatus, setTxRateTestStatus] = useState(false)
     // ---------------------------------------------------------------------------------------------
@@ -290,7 +289,7 @@ export function Topology(props) {
     // 10.1 选择的节点类型
     const [selectedNodeType, setSelectedNodeType] = useState("Router")
     // 10.2 选择的链路类型
-    const [selectedLinkType, setSelectedLinkType] = useState("Router")
+    const [selectedLinkType, setSelectedLinkType] = useState("骨干链路")
     // ---------------------------------------------------------------------------------------------
 
     // 11. 组件初始化过程中使用到的状态
@@ -1004,6 +1003,58 @@ export function Topology(props) {
                 return [...prevLirNodes, lirNode]
             })
             successfullyAdd = true
+        } else if (nodeType === "FabricPeerNode"){
+            setFabricPeerNodes(prevFabricPeerNodes => {
+                let fabricPeerNodeId = nodeType + "_" + (prevFabricPeerNodes.length + 1)
+                let fabricPeerNode = {
+                    id: fabricPeerNodeId,
+                    label: fabricPeerNodeId,
+                    x: x,
+                    y: y,
+                    size: 40,
+                    img: "./pictures/fabricPeerNode.png",
+                    labelCfg: {
+                        position: 'bottom',
+                        style: {
+                            fill: '#ffffff', // 设置字体颜色
+                            fontSize: 14,
+                            background: {
+                                fill: ReturnLableColor(currentState),
+                                padding: [4, 4, 4, 4]
+                            }
+                        }
+                    }
+                }
+                graph.addItem("node", fabricPeerNode)
+                return [...prevFabricPeerNodes, fabricPeerNode]
+            })
+            successfullyAdd = true
+        } else if(nodeType === "FabricOrderNode"){
+            setFabricOrderNodes(prevFabricOrderNodes => {
+                let fabricOrderNodeId = nodeType + "_" + (prevFabricOrderNodes.length + 1)
+                let fabricOrderNode = {
+                    id: fabricOrderNodeId,
+                    label: fabricOrderNodeId,
+                    x: x,
+                    y: y,
+                    size: 40,
+                    img: "./pictures/fabricOrderNode.png",
+                    labelCfg: {
+                        position: 'bottom',
+                        style: {
+                            fill: '#ffffff', // 设置字体颜色
+                            fontSize: 14,
+                            background: {
+                                fill: ReturnLableColor(currentState),
+                                padding: [4, 4, 4, 4]
+                            }
+                        }
+                    }
+                }
+                graph.addItem("node", fabricOrderNode)
+                return [...prevFabricOrderNodes, fabricOrderNode]
+            })
+            successfullyAdd = true
         } else {
             console.log("unsupported node type")
         }
@@ -1384,12 +1435,14 @@ export function Topology(props) {
                             <Col span={5} style={{textAlign: "center"}}>
                                 <Select
                                     defaultValue={"接入链路"}
+                                    value={selectedLinkType}
                                     style={{width: "80%"}}
                                     options={linkTypes.map((linkType) => ({
                                         label: linkType,
                                         value: linkType,
                                     }))}
                                     onChange={(value) => {
+                                        setSelectedLinkType(value)
                                         if (value === "接入链路") {
                                             console.log(graph.get("defaultEdge"))
                                             graph.get("defaultEdge").style = styleForAccessLink

@@ -318,7 +318,7 @@ export function Constellation(props) {
                     altitude
                 )
                 // 根据节点类型进行处理
-                if ("NormalSatellite" === typeName) { // 如果是卫星
+                if (typeName.includes("Satellite")) { // 如果是卫星
                     // 创建一个卫星点在指定的位置
                     entity = (
                         <Entity
@@ -431,33 +431,6 @@ export function Constellation(props) {
                         </PolylineGraphics>
                     </Entity>
                 )
-
-
-                // 下面的方法和 python 方法计算的结果基本一致, 那么只有可能是投影画错了
-                // ------------------------------------------------------------------------------------------------------------------
-                // let groundStationPosition = Cartesian3.fromRadians(
-                //     response.data.positions[sourceContainerName]["longitude"],
-                //     response.data.positions[sourceContainerName]["latitude"],
-                //     response.data.positions[sourceContainerName]["altitude"],
-                // )
-                //
-                // let satellitePosition = Cartesian3.fromRadians(
-                //     response.data.positions[targetContainerName]["longitude"],
-                //     response.data.positions[targetContainerName]["latitude"],
-                //     response.data.positions[targetContainerName]["altitude"],
-                // )
-                //
-                // var difference = Cesium.Cartesian3.subtract(satellitePosition, groundStationPosition, new Cesium.Cartesian3());
-                // difference = Cesium.Cartesian3.normalize(difference, new Cesium.Cartesian3());
-                //
-                // var surfaceNormal = Cesium.Cartesian3.normalize(groundStationPosition, new Cesium.Cartesian3());
-                //
-                // var dotProduct = Cesium.Cartesian3.dot(difference, surfaceNormal);
-                //
-                // var angle = 90 - Cesium.Math.toDegrees(Math.acos(dotProduct));
-                //
-                // console.log(`elevation angle = ${angle}`)
-                // ------------------------------------------------------------------------------------------------------------------
 
                 links.push(GSL)
             }
