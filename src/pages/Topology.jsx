@@ -234,8 +234,10 @@ export function Topology(props) {
             text: ''
         },
         grid: {
-            left: "80px",
-            right: "80px"
+            left: "50px",
+            right: "60px",
+            bottom: "40px",
+            top: "40px"
         },
         tooltip: {
             trigger: 'axis'
@@ -254,7 +256,7 @@ export function Topology(props) {
                 fontSize: 15
             },
             nameTextStyle: {
-                fontSize: 20
+                fontSize: 15
             }
         },
         yAxis: {
@@ -265,7 +267,7 @@ export function Topology(props) {
                 fontSize: 15
             },
             nameTextStyle: {
-                fontSize: 20
+                fontSize: 15
             }
         },
         series: [{
@@ -393,7 +395,7 @@ export function Topology(props) {
             // 默认的边
             defaultEdge: {
                 type: 'arrow-running',
-                style: styleForAccessLink
+                style: styleForBackboneLink
             },
             // 可用的模式: 允许拖拽画布、放缩画布、拖拽节点
             modes: {
@@ -539,8 +541,9 @@ export function Topology(props) {
                         if (target.textContent === "创建webshell") {
                             if (currentTopologyState) {
                                 // 进行 webshell 的创建, 跳转到实际的创建 webshell 的界面
-                                const windowProxy = window.open("_black")
-                                windowProxy.location.href = `/instance/${item.getID()}`
+                                // const windowProxy = window.open("_black")
+                                // windowProxy.location.href = `/instance/${item.getID()}`
+                                window.location.href = `/instance/${item.getID()}`
                             } else {
                                 // 还不能创建 webshell
                                 message.error({
@@ -1403,9 +1406,9 @@ export function Topology(props) {
 
             </Row>
             <Row>
-                <Col span={13}>
+                <Col span={14}>
                     <Card
-                        // size={"small"}
+                        size={"small"}
                         title={"拓扑配置"}
                         style={{marginLeft: "1vw", marginRight: "1vw"}}
                     >
@@ -1434,7 +1437,7 @@ export function Topology(props) {
                             </Col>
                             <Col span={5} style={{textAlign: "center"}}>
                                 <Select
-                                    defaultValue={"接入链路"}
+                                    defaultValue={"骨干链路"}
                                     value={selectedLinkType}
                                     style={{width: "80%"}}
                                     options={linkTypes.map((linkType) => ({
@@ -1480,7 +1483,7 @@ export function Topology(props) {
                     <Row style={{marginLeft: "1vw", marginRight: "1vw"}}>
                         <Col span={12}>
                             <Card
-                                // size={"small"}
+                                size={"small"}
                                 title={"区块链系统配置"}
                             >
                                 {/*注意 Form 是可以当成一行的*/}
@@ -1679,9 +1682,9 @@ export function Topology(props) {
                                             <InputNumber></InputNumber>
                                         </Form.Item>
                                     </Row>
-                                    <Row style={{height: "2.3vh"}}>
+                                    {/*<Row style={{height: "2.3vh"}}>*/}
 
-                                    </Row>
+                                    {/*</Row>*/}
                                     <Row>
                                         <Col span={11} style={{textAlign: "center"}}>
                                             <Button
@@ -1704,7 +1707,7 @@ export function Topology(props) {
                                             </Button>
                                         </Col>
                                     </Row>
-                                    <Row style={{height: "2.3vh"}}>
+                                    <Row style={{height: "1.3vh"}}>
 
                                     </Row>
                                 </Form>
@@ -1716,7 +1719,7 @@ export function Topology(props) {
 
                         <Col span={11}>
                             <Card
-                                // size={"small"}
+                                size={"small"}
                                 title={"攻击配置"}
                             >
                                 <Form
@@ -1861,7 +1864,7 @@ export function Topology(props) {
                             <Row>
                                 <Col span={12}>
                                     <Card
-                                        // size={"small"}
+                                        size={"small"}
                                         title={"共识配置"}
                                     >
                                         <Row>
@@ -1892,6 +1895,7 @@ export function Topology(props) {
                                 </Col>
                                 <Col span={12}>
                                     <Card
+                                        size={"small"}
                                         title={"安全配置"}
                                     >
                                         <Row>
@@ -1915,7 +1919,7 @@ export function Topology(props) {
                             >
                                 <ReactECharts
                                     option={rateOption}
-                                    style={{height: "30vh", width: "100%"}}
+                                    style={{height: "26vh", width: "100%"}}
                                 >
                                 </ReactECharts>
                             </Card>
@@ -1924,7 +1928,7 @@ export function Topology(props) {
                 </Col>
 
                 {/*右侧的拓扑展示界面*/}
-                <Col span={11}>
+                <Col span={10}>
                     <Row style={{marginLeft: "1vw", marginRight: "1vw", height: "100%"}}>
                         <div ref={graphDivRef} id="graph"
                              style={{backgroundColor: "grey", width: "100%", height: "100%"}}>
