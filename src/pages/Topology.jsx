@@ -129,13 +129,19 @@ export function Topology(props) {
         "共识消息重放"
     ]
     // 2.4 区块链的类型
-    const blockchainTypes = ["长安链", "以太坊", "fabric", "BIDL", "百度超级链"]
+    // const blockchainTypes = ["长安链", "以太坊", "fabric", "BIDL", "百度超级链"]
+    // const consensusTypes = {
+    //     "长安链": ["TBFT", "RAFT"],
+    //     "以太坊": ["PoW", "PoS"],
+    //     "fabric": ["BFT-SMaRt"],
+    //     "BIDL": ["PBFT-并行", "PBFT-串行"],
+    //     "百度超级链": ["TDPoS", "PoA"]
+    // }
+    const blockchainTypes = ["长安链", "fabric"]
     const consensusTypes = {
+        "": [],
         "长安链": ["TBFT", "RAFT"],
-        "以太坊": ["PoW", "PoS"],
         "fabric": ["BFT-SMaRt"],
-        "BIDL": ["PBFT-并行", "PBFT-串行"],
-        "百度超级链": ["TDPoS", "PoA"]
     }
     // ---------------------------------------------------------------------------------------------
 
@@ -1176,6 +1182,36 @@ export function Topology(props) {
             }
             topologyDescriptionRequest(params, (response)=>{
                 message.success(`成功切换到 ${changedValues[networkTopologyField[0]]} 拓扑`)
+                let topologyDescriptionInString = JSON.stringify(response.data["topology_description"])
+                if(topologyDescriptionInString.indexOf("FabricOrderNode") !== -1) {
+                    console.log("select fabric")
+                    // 设置选择的区块链
+                    setSelectedBlockchain("fabric");
+                    // 设置共识协议的可选项
+                    setAvailableConsensusTypes(consensusTypes["fabric"])
+                    startTopologyForm.setFieldsValue({
+                        [blockchainTypeField[0]]: "fabric",
+                        [consensusTypeField[0]]: consensusTypes["fabric"],
+                    })
+                } else if (topologyDescriptionInString.indexOf("ChainMakerNode") !== -1){
+                    console.log("select chainmaker")
+                    // 设置选择的区块链
+                    setSelectedBlockchain("长安链");
+                    // 设置共识协议的可选项
+                    setAvailableConsensusTypes(consensusTypes["长安链"])
+                    startTopologyForm.setFieldsValue({
+                        [blockchainTypeField[0]]: "长安链",
+                        [consensusTypeField[0]]: consensusTypes["长安链"],
+                    })
+                } else {
+                    console.log("select nothing")
+                    setSelectedBlockchain("")
+                    setAvailableConsensusTypes([])
+                    startTopologyForm.setFieldsValue({
+                        [blockchainTypeField[0]]: "",
+                        [consensusTypeField[0]]: [],
+                    })
+                }
                 rebuildGraph(JSON.parse(response.data["topology_description"]))
             }, (error)=>{
                 message.error("切换拓扑失败")
