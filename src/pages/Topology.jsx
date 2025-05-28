@@ -5,13 +5,13 @@ import {Node} from "../entities/node"
 import {Link} from "../entities/link"
 import {
     changeStartDefenceRequest,
-    getTopologyState,
+    getTopologyState, installChannelAndChaincode,
     pageClose, saveTopologyRequest,
     startAttackRequest,
     startTopology,
-    startTxRateTest,
+    startTxRateTest, stopNode,
     stopTopology,
-    stopTxRateTest, topologyDescriptionRequest
+    stopTxRateTest, topologyDescriptionRequest,
 } from "../requests/topology";
 import {InputNumber} from "antd/lib";
 import {ProForm} from "@ant-design/pro-components";
@@ -192,6 +192,7 @@ export function Topology(props) {
     // 5. 拓扑状态
     // ---------------------------------------------------------------------------------------------
     const [currentTopologyState, setCurrentTopologyState] = useState(false)
+    const [currentChannelChaincodeState, setCurrentChannelChaincodeState] = useState(false)
     const [currentAttackState, setCurrentAttackState] = useState(false)
     const [routers, setRouters] = useState([])
     const [normalNodes, setNormalNodes] = useState([])
@@ -318,7 +319,8 @@ export function Topology(props) {
         stopTopology: Symbol.for("stopTopology"),
         startAttack: Symbol.for("startAttack"),
         errorParameters: Symbol.for("errorParameters"),
-        saveTopology: Symbol.for("saveTopology")
+        saveTopology: Symbol.for("saveTopology"),
+        installChannelandChainCode: Symbol.for("installChannelAndChaincode")
     }
     // 12.2 提示框的各个属性
     const [promptBoxType, setPromptBoxType] = useState()
@@ -328,6 +330,7 @@ export function Topology(props) {
     const [promptBoxOkText, setPromptBoxOkText] = useState("ok")
     const [promptBoxCancelText, setPromptBoxCancelText] = useState("cancel")
     const [promptBoxLoading, setPromptBoxLoading] = useState(false)
+    const [containerNameToPortMapping, setContainerNameToPortMapping] = useState("")
     // ---------------------------------------------------------------------------------------------
 
     // 13. 函数化组件初始化第一步 - 进行监听器的设置
@@ -401,7 +404,8 @@ export function Topology(props) {
             // 默认的边
             defaultEdge: {
                 type: 'arrow-running',
-                style: styleForBackboneLink
+                style: styleForBackboneLink,
+                label: "edge",
             },
             // 可用的模式: 允许拖拽画布、放缩画布、拖拽节点
             modes: {
@@ -457,6 +461,10 @@ export function Topology(props) {
     useEffect(() => {
         if (createGraph === 1) {
             getTopologyState((response) => {
+
+                let container_name_to_port_mapping = response.data["container_name_to_port_mapping"]
+                setContainerNameToPortMapping(container_name_to_port_mapping)
+
                 // 不管是 up 还是 down 都能够获取
                 let all_topology_names = response.data["all_topology_names"]
                 setTopologyOptionsWithTopologyNames(all_topology_names)
@@ -473,7 +481,10 @@ export function Topology(props) {
                     })
                     setCurrentTopologyState(true)
                     setStartDefence(response.data["topology_params"]["start_defence"])
-                    rebuildGraph(response.data["topology_params"], true)
+
+                    // rebuildGraph(response.data["topology_params"], true)
+                    rebuildGraphWithLinkParams(response.data["topology_params"], response.data["links"], true)
+                    // rebuildGraph(response.data["topology_params"], true)
                 } else if (response.data["state"] === "down") {
                     setCurrentTopologyState(false)
                 } else {
@@ -489,6 +500,42 @@ export function Topology(props) {
             })
         }
     }, [createGraph]);
+
+
+    function rebuildGraphWithLinkParams(topology_params, link_params, state) {
+        // 需要先进行所有的节点的删除
+        clearState()
+        for (let i = 0; i < topology_params["nodes"].length; i++) {
+            let node = topology_params["nodes"][i]
+            AddNodeLogic(node["type"], node["x"], node["y"], state)
+        }
+        setTimeout(() => {
+            for (let i = 0; i < topology_params["links"].length; i++) {
+                let link = topology_params["links"][i]
+                let sourceNodeId = link["source_node"]["type"] + "_" + link["source_node"]["index"]
+                let targetNodeId = link["target_node"]["type"] + "_" + link["target_node"]["index"]
+                let link_type = link["link_type"]
+                let sourceNodeIdBackend = link["source_node"]["type"] + "-" + link["source_node"]["index"]
+                let targetNodeIdBackend = link["target_node"]["type"] + "-" + link["target_node"]["index"]
+
+                let link_param = link_params[sourceNodeIdBackend][targetNodeIdBackend]
+                if (!link_param) {
+                    link_param = link_params[targetNodeIdBackend][sourceNodeIdBackend]
+                }
+                let source_interface_addr = link_param["source-interface"]["source-ipv4"]
+                let target_interface_addr = link_param["target-interface"]["source-ipv4"]
+                let source_interface_name = link_param["source-interface"]["IfName"]
+                let target_interface_name = link_param["target-interface"]["IfName"]
+                let finalString = ""
+                finalString += `net: ${link_param["network-segment-ipv4"]}\n`
+                finalString += `${source_interface_name}: ${source_interface_addr}\n`
+                finalString += `${target_interface_name}: ${target_interface_addr}`
+
+                AddEdgeLogicWithText(sourceNodeId, targetNodeId, link_type, finalString)
+            }
+        }, 50)
+    }
+
 
     // 根据后端返回的参数重新进行图的构建
     function rebuildGraph(topology_params, state) {
@@ -538,6 +585,7 @@ export function Topology(props) {
                         outDiv.innerHTML = `<ul>
                     <li>创建webshell</li>
                     <li>删除节点</li>
+                    <li>暂停节点</li>
                     <li>取消</li>
                   </ul>`
                         return outDiv
@@ -561,6 +609,26 @@ export function Topology(props) {
                                 graph.removeItem(item)
                             }, 0)
                             message.success("成功删除节点" + item.getID())
+                        } else if (target.textContent === "暂停节点") {
+                            if(!currentTopologyState) {
+                                message.error({
+                                    content: "current topology down: cannot pause node"
+                                })
+                            }
+                            let nodeId = item.getID()
+                            let typeAndId = nodeId.split("_")
+                            let containerName = `${typeAndId[0]}-${typeAndId[1]}`
+                            console.log(containerNameToPortMapping)
+                            console.log(containerNameToPortMapping[containerName])
+                            stopNode(containerNameToPortMapping[containerName], (response)=>{
+                                message.success({
+                                    content: "successfully stop the node"
+                                })
+                            }, (error)=>{
+                                message.success({
+                                    content: "stop node failed"
+                                })
+                            })
                         }
                     },
                 })
@@ -751,6 +819,23 @@ export function Topology(props) {
                 })
                 setPromptBoxOpen(false)
                 setPromptBoxLoading(false)
+            })
+        } else if (promptBoxType === promptBoxTypes.installChannelandChainCode) {
+            setPromptBoxLoading(true)
+            installChannelAndChaincode((response)=>{
+                message.success({
+                    content: "成功安装通道和链码"
+                })
+                setCurrentChannelChaincodeState(true)
+                setPromptBoxLoading(false)
+                setPromptBoxOpen(false)
+            }, (error)=>{
+                setCurrentChannelChaincodeState(false)
+                message.error({
+                    content: "安装channel以及链码失败"
+                })
+                setPromptBoxLoading(false)
+                setPromptBoxOpen(false)
             })
         } else {
             console.log("unsupported promptBoxType")
@@ -1090,7 +1175,24 @@ export function Topology(props) {
                 style: styleForBackboneLink,
             })
         }
+    }
 
+    function AddEdgeLogicWithText(sourceNodeId, targetNodeId, link_type, text) {
+        if (link_type === "access") {
+            graph.addItem("edge", {
+                source: sourceNodeId,
+                target: targetNodeId,
+                style: styleForAccessLink,
+                label: text,
+            })
+        } else if (link_type === "backbone") {
+            graph.addItem("edge", {
+                source: sourceNodeId,
+                target: targetNodeId,
+                style: styleForBackboneLink,
+                label: text,
+            })
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -1191,7 +1293,7 @@ export function Topology(props) {
                     setAvailableConsensusTypes(consensusTypes["fabric"])
                     startTopologyForm.setFieldsValue({
                         [blockchainTypeField[0]]: "fabric",
-                        [consensusTypeField[0]]: consensusTypes["fabric"],
+                        [consensusTypeField[0]]: consensusTypes["fabric"][0],
                     })
                 } else if (topologyDescriptionInString.indexOf("ChainMakerNode") !== -1){
                     console.log("select chainmaker")
@@ -1405,6 +1507,13 @@ export function Topology(props) {
             })
         })
     }
+
+    function installChannelAndChaincodeClicked() {
+        setPromptBoxType(promptBoxTypes.installChannelandChainCode)
+        setPromptBoxOpen(true)
+        setPromptBoxTitle("安装链码")
+        setPromptBoxText("请确认是否安装链码!")
+    }
     // ---------------------------------------------------------------------------------------------
 
 
@@ -1581,7 +1690,7 @@ export function Topology(props) {
                                                 name={blockchainTypeField[0]}
                                                 rules={[
                                                     {
-                                                        required: true,
+                                                        required: false,
                                                         message: "请选择区块链"
                                                     }
                                                 ]}
@@ -1603,7 +1712,7 @@ export function Topology(props) {
                                                 name={consensusTypeField[0]}
                                                 rules={[
                                                     {
-                                                        required: true,
+                                                        required: false,
                                                         message: "请选择共识协议"
                                                     }
                                                 ]}
@@ -1722,7 +1831,8 @@ export function Topology(props) {
 
                                     {/*</Row>*/}
                                     <Row>
-                                        <Col span={11} style={{textAlign: "center"}}>
+                                        <Col span={2}></Col>
+                                        <Col span={6} style={{textAlign: "center"}}>
                                             <Button
                                                 type={"primary"}
                                                 style={{width: "100%", backgroundColor: '#28c016'}}
@@ -1731,8 +1841,8 @@ export function Topology(props) {
                                                 启动拓扑
                                             </Button>
                                         </Col>
-                                        <Col span={2}></Col>
-                                        <Col span={11} style={{textAlign: "center"}}>
+                                        <Col span={1}></Col>
+                                        <Col span={6} style={{textAlign: "center"}}>
                                             <Button
                                                 type={"primary"}
                                                 danger
@@ -1740,6 +1850,17 @@ export function Topology(props) {
                                                 disabled={!currentTopologyState}
                                                 onClick={StopTopology}>
                                                 停止拓扑
+                                            </Button>
+                                        </Col>
+                                        <Col span={1}></Col>
+                                        <Col span={6} style={{textAlign: "center"}}>
+                                            <Button
+                                                type={"primary"}
+                                                style={{width: "100%", backgroundColor: '#6495ED'}}
+                                                disabled={!currentTopologyState}
+                                                onClick={installChannelAndChaincodeClicked}
+                                                >
+                                                安装链码
                                             </Button>
                                         </Col>
                                     </Row>

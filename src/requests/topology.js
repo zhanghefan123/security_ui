@@ -10,9 +10,11 @@ const getManetTopologyUrl = "/topologies/path_validation_topology.txt"
 const startAttackRequestUrl = "startAttack"
 const startTxRateTestUrl = "startTxRateTest"
 const stopTxRateTestUrl = "stopTxRateTest"
+const installChannelAndChaincodeUrl = "installChannelAndChaincode"
 const saveTopologyUrl = "saveTopology"
 const getTopologyDescriptionUrl = "getTopologyDescription"
 const changeStartDefenceUrl = "changeStartDefence"
+const stopUrl = "/stop"
 
 export const changeStartDefenceRequest = (params, response_callback, error_callback) => {
     axios.post(`${UrlBase}/${changeStartDefenceUrl}`, params).then((response)=>{
@@ -123,6 +125,26 @@ export const stopTxRateTest = (response_callback, error_callback) => {
     }, (error)=>{
         error_callback(error)
     })
+}
+
+
+// installChannelAndChaincode 安装 channel 和链码
+export const installChannelAndChaincode = (response_callback, error_callback) => {
+    axios.post(`${UrlBase}/${installChannelAndChaincodeUrl}`).then((response)=>{
+        response_callback(response)
+    }, (error)=>{
+        error_callback(error)
+    })
+}
+
+export const stopNode = (port, response_callback, error_callback) => {
+    let urlTmp = `http://${topologyServerAddr}:${port}${stopUrl}`
+    axios.post(urlTmp).then((response)=>{
+        response_callback(response)
+    }, (error)=>{
+        error_callback(error)
+    }
+    )
 }
 
 // 当页面关闭的时候的操作
