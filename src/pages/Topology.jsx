@@ -6,10 +6,10 @@ import {Link} from "../entities/link"
 import {
     changeStartDefenceRequest,
     getTopologyState, installChannelAndChaincode,
-    pageClose, saveTopologyRequest,
-    startAttackRequest,
+    pageClose, saveTopologyRequest, startAttack,
+    startAttackRequest, startMaliciousSynchronize,
     startTopology,
-    startTxRateTest, stopNode,
+    startTxRateTest, stopAttack, stopMaliciousSynchronize, stopNode,
     stopTopology,
     stopTxRateTest, topologyDescriptionRequest,
 } from "../requests/topology";
@@ -586,6 +586,10 @@ export function Topology(props) {
                     <li>创建webshell</li>
                     <li>删除节点</li>
                     <li>暂停节点</li>
+                    <li>攻击主节点</li>
+                    <li>停止攻击主节点</li>
+                    <li>恶意向主节点同步</li>
+                    <li>停止向恶意向主节点同步</li>
                     <li>取消</li>
                   </ul>`
                         return outDiv
@@ -595,9 +599,9 @@ export function Topology(props) {
                         if (target.textContent === "创建webshell") {
                             if (currentTopologyState) {
                                 // 进行 webshell 的创建, 跳转到实际的创建 webshell 的界面
-                                // const windowProxy = window.open("_black")
-                                // windowProxy.location.href = `/instance/${item.getID()}`
-                                window.location.href = `/instance/${item.getID()}`
+                                const windowProxy = window.open("_black")
+                                windowProxy.location.href = `/instance/${item.getID()}`
+                                // window.location.href = `/instance/${item.getID()}` // 这里是直接进行现场打开的结果
                             } else {
                                 // 还不能创建 webshell
                                 message.error({
@@ -627,6 +631,79 @@ export function Topology(props) {
                             }, (error)=>{
                                 message.success({
                                     content: "stop node failed"
+                                })
+                            })
+                        } else if(target.textContent === "攻击主节点") {
+                            if(!currentTopologyState) {
+                                message.error({
+                                    content: "current topology down: cannot start attack"
+                                })
+                            }
+                            let nodeId = item.getID()
+                            let typeAndId = nodeId.split("_")
+                            let containerName = `${typeAndId[0]}-${typeAndId[1]}`
+                            startAttack(containerNameToPortMapping[containerName], (response)=>{
+                                message.success({
+                                    content: "successfully start attack against "
+                                })
+                            }, (error)=>{
+                                message.error({
+                                    content: "start attack failed"
+                                })
+                            })
+                        } else if(target.textContent === "停止攻击主节点") {
+                            if(!currentTopologyState) {
+                                message.error({
+                                    content: "current topology down: cannot stop attack"
+                                })
+                            }
+                            let nodeId = item.getID()
+                            let typeAndId = nodeId.split("_")
+                            let containerName = `${typeAndId[0]}-${typeAndId[1]}`
+                            stopAttack(containerNameToPortMapping[containerName], (response)=>{
+                                message.success({
+                                    content: "successfully stop attack against leader"
+                                })
+                            }, (error)=>{
+                                message.error({
+                                    content: "stop attack failed"
+                                })
+                            })
+                        } else if (target.textContent === "恶意向主节点同步") {
+                            if(!currentTopologyState) {
+                                message.error({
+                                    content: "cannot synchronize to main leader"
+                                })
+                            }
+                            let nodeId = item.getID()
+                            let typeAndId = nodeId.split("_")
+                            let containerName = `${typeAndId[0]}-${typeAndId[1]}`
+                            startMaliciousSynchronize(containerNameToPortMapping[containerName], (response)=>{
+                                message.success({
+                                    content: "successfully start malicious synchoronize"
+                                })
+                            }, (error)=>{
+                                message.error({
+                                    content: "start malicious synchronize failed"
+                                })
+                            })
+                        } else if (target.textContent === "停止向恶意向主节点同步") {
+                            console.log("hello")
+                            if (!currentTopologyState) {
+                                message.error({
+                                    content: "cannot stop sychronize to main leader"
+                                })
+                            }
+                            let nodeId = item.getID()
+                            let typeAndId = nodeId.split("_")
+                            let containerName = `${typeAndId[0]}-${typeAndId[1]}`
+                            stopMaliciousSynchronize(containerNameToPortMapping[containerName], (response)=>{
+                                message.success({
+                                    content: "successfully stop malicious synchoronize"
+                                })
+                            }, (error)=>{
+                                message.error({
+                                    content: "stop malicious synchronize failed"
                                 })
                             })
                         }

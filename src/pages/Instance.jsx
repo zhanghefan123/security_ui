@@ -360,9 +360,13 @@ export function Instance(props) {
 
     // 判断应该进行哪种option的返回
     let echartOption = ()=>{
-        if (containerName.indexOf("ChainMaker") !== -1) {
+        let isChainMaker = containerName.indexOf("ChainMaker") !== -1
+        let isFabric = containerName.indexOf("FabricOrder") !== -1
+        if (isChainMaker || isFabric) {
+            console.log("is blockchain")
             return interfaceRateAndRatioOption
         } else {
+            console.log("is not blockchain")
             return interfaceRateOption
         }
     }

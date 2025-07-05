@@ -15,6 +15,10 @@ const saveTopologyUrl = "saveTopology"
 const getTopologyDescriptionUrl = "getTopologyDescription"
 const changeStartDefenceUrl = "changeStartDefence"
 const stopUrl = "/stop"
+const startAttackUrl = "/start_attack"
+const stopAttackUrl = "/stop_attack"
+const startMaliciousSynchoronizeUrl = "/start_malicious_synchronize"
+const stopMaliciousSynchronizeUrl = "/stop_malicious_synchronize"
 
 export const changeStartDefenceRequest = (params, response_callback, error_callback) => {
     axios.post(`${UrlBase}/${changeStartDefenceUrl}`, params).then((response)=>{
@@ -145,6 +149,42 @@ export const stopNode = (port, response_callback, error_callback) => {
         error_callback(error)
     }
     )
+}
+
+export const startAttack = (port, response_callback, error_callback) => {
+    let urlTmp = `http://${topologyServerAddr}:${port}${startAttackUrl}`
+    axios.post(urlTmp).then((response)=>{
+        response_callback(response)
+    }, (error)=>{
+        error_callback(error)
+    })
+}
+
+export const stopAttack = (port, response_callback, error_callback) => {
+    let urlTmp = `http://${topologyServerAddr}:${port}${stopAttackUrl}`
+    axios.post(urlTmp).then((response)=>{
+        response_callback(response)
+    }, (error)=>{
+        error_callback(error)
+    })
+}
+
+export const startMaliciousSynchronize = (port, response_callback, error_callback) => {
+    let urlTmp = `http://${topologyServerAddr}:${port}${startMaliciousSynchoronizeUrl}`
+    axios.post(urlTmp).then((response)=>{
+        response_callback(response)
+    }, (error)=>{
+        error_callback(error)
+    })
+}
+
+export const stopMaliciousSynchronize = (port, response_callback, error_callback) => {
+    let urlTmp = `http://${topologyServerAddr}:${port}${stopMaliciousSynchronizeUrl}`
+    axios.post(urlTmp).then((response)=>{
+        response_callback(response)
+    }, (error)=>{
+        error_callback(error)
+    })
 }
 
 // 当页面关闭的时候的操作
