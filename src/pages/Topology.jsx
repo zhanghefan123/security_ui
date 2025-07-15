@@ -2051,9 +2051,10 @@ export function Topology(props) {
                                             >
                                                 <Select value={selectedAttackedNode}
                                                         disabled={currentAttackState}
-                                                        options={chainMakerNodes.map((chainMakerNode) => ({
-                                                            label: chainMakerNode,
-                                                            value: chainMakerNode,
+                                                        // options={fabricOrderNodes}
+                                                    options={fabricOrderNodes.map((fabricOrderNode) => ({
+                                                            label: fabricOrderNode.id,
+                                                            value: fabricOrderNode.id,
                                                         }))}
                                                 >
                                                 </Select>

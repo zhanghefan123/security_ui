@@ -17,6 +17,10 @@ export function Instance(props) {
     const [cpuRatioList, setCpuRatioList] = useState([])
     const [memoryList, setMemoryList] = useState([])
     const [blockRatioList, setBlockRatioList] = useState([])
+    const [connectedList, setConnectedList] = useState([])
+    const [halfConnectedList, setHalfConnectedList] = useState([])
+    const [timeoutList, setTimeoutList] = useState([])
+    const [messageCountList, setMessageCountList] = useState([])
 
     let captureTimer = undefined
 
@@ -56,6 +60,18 @@ export function Instance(props) {
             setMemoryList(response.data["memory_list"])
             if (response.data["block_ratio_list"]){
                 setBlockRatioList(response.data["block_ratio_list"])
+            }
+            if (response.data["connected_count_list"]) {
+                setConnectedList(response.data["connected_count_list"])
+            }
+            if (response.data["half_connected_count_list"]){
+                setHalfConnectedList(response.data["half_connected_count_list"])
+            }
+            if (response.data["time_out_list"]) {
+                setTimeoutList(response.data["time_out_list"])
+            }
+            if (response.data["message_count_list"]){
+                setMessageCountList(response.data["message_count_list"])
             }
         }, (error)=>{
             clearInterval(captureTimer)
@@ -354,6 +370,173 @@ export function Instance(props) {
                 smooth: false,
                 symbolSize: 15,
                 color: "blue",
+            },
+        ]
+    }
+
+    const tcpConnectedAndHalfConnectedOption = {
+        title: {
+            text: "",
+        },
+        grid: {
+            left: "80px",
+            right: "80px"
+        },
+        tooltip: {
+            trigger: "axis"
+        },
+        legend: {
+            data:['TCP 已建立连数', "TCP 半开连接数"],
+            textStyle: {
+                fontSize: 15, // 图例字体大小
+            }
+        },
+        xAxis: {
+            type: "category",
+            data: timeList,
+            axisLabel: {
+                fontSize: 15
+            },
+            nameTextStyle: {
+                fontSize: 20
+            }
+        },
+        yAxis: [
+            {
+                name: "TCP 已建立连数",
+                type: "value",
+                position: "left",
+                axisLabel: {
+                    formatter: '{value}',
+                    fontSize: 15
+                },
+                nameTextStyle: {
+                    fontSize: 20
+                },
+            },
+            {
+                name: "TCP 半开连接数",
+                type: "value",
+                position: "right",
+                axisLabel: {
+                    formatter: '{value}',
+                    fontSize: 15
+                },
+                nameTextStyle: {
+                    fontSize: 20
+                },
+            },
+        ],
+        series: [
+            {
+                name: 'TCP 已建立连接数',
+                type:'line',
+                yAxisIndex: 1,
+                data: connectedList,
+                lineStyle: {
+                    width: 4,
+                    color: "purple",
+                },
+                smooth: false,
+                symbolSize: 15,
+                color: "purple",
+            },
+            {
+                name: 'TCP 半开连接数',
+                type:'line',
+                yAxisIndex: 1,
+                data: halfConnectedList,
+                lineStyle: {
+                    width: 4,
+                    color: "orange",
+                },
+                smooth: false,
+                symbolSize: 15,
+                color: "orange",
+            }
+        ]
+    }
+
+
+    const timeoutAndMessageCountOption = {
+        title: {
+            text: "",
+        },
+        grid: {
+            left: "80px",
+            right: "80px"
+        },
+        tooltip: {
+            trigger: "axis"
+        },
+        legend: {
+            data:['共识超时次数', "总线消息数量"],
+            textStyle: {
+                fontSize: 15, // 图例字体大小
+            }
+        },
+        xAxis: {
+            type: "category",
+            data: timeList,
+            axisLabel: {
+                fontSize: 15
+            },
+            nameTextStyle: {
+                fontSize: 20
+            }
+        },
+        yAxis: [
+            {
+                name: "共识超时次数",
+                type: "value",
+                position: "left",
+                axisLabel: {
+                    formatter: '{value}',
+                    fontSize: 15
+                },
+                nameTextStyle: {
+                    fontSize: 20
+                },
+            },
+            {
+                name: "总线消息数量",
+                type: "value",
+                position: "right",
+                axisLabel: {
+                    formatter: '{value}',
+                    fontSize: 15
+                },
+                nameTextStyle: {
+                    fontSize: 20
+                },
+            },
+        ],
+        series: [
+            {
+                name: '共识超时次数',
+                type:'line',
+                yAxisIndex: 1,
+                data: timeoutList,
+                lineStyle: {
+                    width: 4,
+                    color: "purple",
+                },
+                smooth: false,
+                symbolSize: 15,
+                color: "purple",
+            },
+            {
+                name: '总线消息数量',
+                type:'line',
+                yAxisIndex: 1,
+                data: messageCountList,
+                lineStyle: {
+                    width: 4,
+                    color: "orange",
+                },
+                smooth: false,
+                symbolSize: 15,
+                color: "orange",
             }
         ]
     }
@@ -394,6 +577,26 @@ export function Instance(props) {
                             option={cpuAndMemoryRateOption}
                             style={{height: "30vh", width: "100%"}}
                         >
+                        </ReactECharts>
+                    </Card>
+                </Col>
+            </Row>
+            <Row justify={"center"}>
+                <Col span={12}>
+                    <Card
+                    size={"small"}>
+                        <ReactECharts
+                        option={tcpConnectedAndHalfConnectedOption}
+                        style={{height: "30vh", width: "100%"}}>
+                        </ReactECharts>
+                    </Card>
+                </Col>
+                <Col span={12}>
+                    <Card
+                        size={"small"}>
+                        <ReactECharts
+                            option={timeoutAndMessageCountOption}
+                            style={{height: "30vh", width: "100%"}}>
                         </ReactECharts>
                     </Card>
                 </Col>
