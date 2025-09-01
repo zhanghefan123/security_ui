@@ -3,12 +3,14 @@ import {Topology} from "../pages/Topology";
 import {Constellation} from "../pages/Constellation";
 import {Instance} from "../pages/Instance";
 import {TestApp} from "../pages/Test";
+import {TopologyOnly} from "../pages/TopologyOnly";
 
 export const RoutesMapping = new Map([
     [0, ["拓扑配置界面", "/topology", <Topology/>]],
     [1, ["星座可视化界面", "/constellation", <Constellation/>]],
     [2, ["命令行", "/instance/:containerName", <Instance/>]],
-    [3, ["测试", "/test", <TestApp/>]]
+    [3, ["测试", "/test", <TestApp/>]],
+    [4, ["单纯拓扑界面", "/topology_only", <TopologyOnly/>]]
 ])
 
 // GenerateRoutes 进行路由 Tags 的生成

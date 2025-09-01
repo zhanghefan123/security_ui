@@ -1,6 +1,7 @@
 import * as G6 from "@antv/g6";
 import React, {useEffect, useRef, useState} from "react";
 import {Button, Card, Col, Form, Input, message, Modal, Row, Select, Switch, Table, Upload} from "antd";
+import "./Topology.css";
 import {Node} from "../entities/node"
 import {Link} from "../entities/link"
 import {
@@ -106,7 +107,8 @@ export function Topology(props) {
         "MaliciousNode",
         "LirNode",
         "FabricPeerNode",
-        "FabricOrderNode"
+        "FabricOrderNode",
+        "FiscoBcosNode",
     ]
     // 2.2 链路类型
     const linkTypes = [
@@ -202,6 +204,7 @@ export function Topology(props) {
     const [lirNodes, setLirNodes] = useState([])
     const [fabricPeerNodes, setFabricPeerNodes] = useState([])
     const [fabricOrderNodes, setFabricOrderNodes] = useState([])
+    const [fiscoBcosNodes, setFiscoBcosNodes] = useState([])
     const [totalNodesCount, setTotalNodesCount] = useState(0)
     const [txRateTestStatus, setTxRateTestStatus] = useState(false)
     // ---------------------------------------------------------------------------------------------
@@ -253,6 +256,7 @@ export function Topology(props) {
             data: ['共识速率/TPS'],
             textStyle: {
                 fontSize: 15, // 图例字体大小
+                color: "rgb(22,237,240)"
             }
         },
         xAxis: {
@@ -263,7 +267,8 @@ export function Topology(props) {
                 fontSize: 15
             },
             nameTextStyle: {
-                fontSize: 15
+                fontSize: 15,
+                color: "rgb(22,237,240)"
             }
         },
         yAxis: {
@@ -274,7 +279,8 @@ export function Topology(props) {
                 fontSize: 15
             },
             nameTextStyle: {
-                fontSize: 15
+                fontSize: 15,
+                color: "rgb(22,237,240)"
             }
         },
         series: [{
@@ -284,11 +290,11 @@ export function Topology(props) {
             data: currentTps,
             lineStyle: {
                 width: 4,
-                color: "rgb(79,222,7)",
+                color: "rgb(22,237,240)",
             },
             smooth: false,
             symbolSize: 15,
-            color: "rgb(79,222,7)",
+            color: "rgb(22,237,240)",
         }]
     }
     // ---------------------------------------------------------------------------------------------
@@ -351,21 +357,32 @@ export function Topology(props) {
             }
         }
 
+        // 窗口大小改变时的处理函数
+        let resizeFunction = () => {
+            if (graph && graphDivRef.current) {
+                const newWidth = graphDivRef.current.clientWidth;
+                const newHeight = graphDivRef.current.clientHeight || window.innerHeight * 0.8;
+                graph.changeSize(newWidth, newHeight);
+            }
+        }
+
         // 注册回调函数, 回调函数在 beforeunload 和 unload 事件发生的时候被调用
         window.addEventListener("beforeunload", beforeUnloadFunction)
         window.addEventListener("unload", unloadFunction)
+        window.addEventListener("resize", resizeFunction)
 
         // 在结束的时候进行卸载
         return ()=>{
             // 进行监听器的删除
             window.removeEventListener("beforeunload", beforeUnloadFunction)
             window.removeEventListener("unload", unloadFunction)
+            window.removeEventListener("resize", resizeFunction)
             // 进行 timer 的删除
             if(txRateTimer){
                 clearInterval(txRateTimer)
             }
         }
-    }, []);
+    }, [graph]);
     // ---------------------------------------------------------------------------------------------
 
     // 14. 组件初始化的第二步 创建图
@@ -382,9 +399,9 @@ export function Topology(props) {
         // 进行图的实例化
         const graphTmp = new G6.Graph({
             container: 'graph', // html 元素的 id
-            // 图的宽度以及高毒
+            // 图的宽度以及高度
             width: graphDivRef.current.clientWidth,
-            height: graphDivRef.current.clientHeight,
+            height: graphDivRef.current.clientHeight || window.innerHeight * 0.8,
             // 默认的节点
             defaultNode: {
                 type: 'image',
@@ -405,7 +422,7 @@ export function Topology(props) {
             defaultEdge: {
                 type: 'arrow-running',
                 style: styleForBackboneLink,
-                label: "edge",
+                label: "",
             },
             // 可用的模式: 允许拖拽画布、放缩画布、拖拽节点
             modes: {
@@ -518,6 +535,10 @@ export function Topology(props) {
                 let sourceNodeIdBackend = link["source_node"]["type"] + "-" + link["source_node"]["index"]
                 let targetNodeIdBackend = link["target_node"]["type"] + "-" + link["target_node"]["index"]
 
+
+                // ---------------------- link param add logic ----------------------
+                let finalString = ""
+                /*
                 let link_param = link_params[sourceNodeIdBackend][targetNodeIdBackend]
                 if (!link_param) {
                     link_param = link_params[targetNodeIdBackend][sourceNodeIdBackend]
@@ -530,6 +551,8 @@ export function Topology(props) {
                 finalString += `net: ${link_param["network-segment-ipv4"]}\n`
                 finalString += `${source_interface_name}: ${source_interface_addr}\n`
                 finalString += `${target_interface_name}: ${target_interface_addr}`
+                 */
+                // ---------------------- link param add logic ----------------------
 
                 AddEdgeLogicWithText(sourceNodeId, targetNodeId, link_type, finalString)
             }
@@ -564,6 +587,9 @@ export function Topology(props) {
         setChainMakerNodes([])
         setMaliciousNodes([])
         setLirNodes([])
+        setFabricOrderNodes([])
+        setFabricPeerNodes([])
+        setFiscoBcosNodes([])
         setTotalNodesCount(0)
     }
     // ---------------------------------------------------------------------------------------------
@@ -643,8 +669,9 @@ export function Topology(props) {
                             let typeAndId = nodeId.split("_")
                             let containerName = `${typeAndId[0]}-${typeAndId[1]}`
                             startAttack(containerNameToPortMapping[containerName], (response)=>{
+                                console.log(response)
                                 message.success({
-                                    content: "successfully start attack against "
+                                    content: `successfully start attack against ${response.data["target"]}`
                                 })
                             }, (error)=>{
                                 message.error({
@@ -1017,6 +1044,8 @@ export function Topology(props) {
     // 18.3 节点添加的逻辑
     const AddNodeLogic = (nodeType, x, y, currentState) => {
         let successfullyAdd = false
+        let fontsize = 20
+        let figuresize = 60
         if (nodeType === "Router") { // 进行路由节点的添加
             setRouters(prevRouters => {
                 let routerId = nodeType + "_" + (prevRouters.length + 1)
@@ -1025,13 +1054,13 @@ export function Topology(props) {
                     label: routerId,
                     x: x,
                     y: y,
-                    size: 40,
+                    size: figuresize,
                     img: "./pictures/router.png",
                     labelCfg: {
                         position: 'bottom',
                         style: {
                             fill: '#ffffff', // 设置字体颜色
-                            fontSize: 14,
+                            fontSize: fontsize,
                             shadowOffsetY: 10,
                             background: {
                                 fill: ReturnLableColor(currentState),
@@ -1052,13 +1081,13 @@ export function Topology(props) {
                     label: normalNodeId,
                     x: x,
                     y: y,
-                    size: 40,
+                    size: figuresize,
                     img: './pictures/normalNode.png',
                     labelCfg: {
                         position: 'bottom',
                         style: {
                             fill: '#ffffff', // 设置字体颜色
-                            fontSize: 14,
+                            fontSize: fontsize,
                             background: {
                                 fill: ReturnLableColor(currentState),
                                 padding: [4, 4, 4, 4]
@@ -1078,13 +1107,13 @@ export function Topology(props) {
                     label: consensusNodeId,
                     x: x,
                     y: y,
-                    size: 40,
+                    size: figuresize,
                     img: './pictures/consensusNode.png',
                     labelCfg: {
                         position: 'bottom',
                         style: {
                             fill: '#ffffff', // 设置字体颜色
-                            fontSize: 14,
+                            fontSize: fontsize,
                             background: {
                                 fill: ReturnLableColor(currentState),
                                 padding: [4, 4, 4, 4]
@@ -1104,13 +1133,13 @@ export function Topology(props) {
                     label: chainMakerNodeId,
                     x: x,
                     y: y,
-                    size: 40,
+                    size: figuresize,
                     img: './pictures/chainMakerNode.png',
                     labelCfg: {
                         position: 'bottom',
                         style: {
                             fill: '#ffffff', // 设置字体颜色
-                            fontSize: 14,
+                            fontSize: fontsize,
                             background: {
                                 fill: ReturnLableColor(currentState),
                                 padding: [4, 4, 4, 4]
@@ -1130,13 +1159,13 @@ export function Topology(props) {
                     label: maliciousNodeId,
                     x: x,
                     y: y,
-                    size: 40,
+                    size: figuresize,
                     img: "./pictures/maliciousNode.png",
                     labelCfg: {
                         position: 'bottom',
                         style: {
                             fill: '#ffffff', // 设置字体颜色
-                            fontSize: 14,
+                            fontSize: fontsize,
                             background: {
                                 fill: ReturnLableColor(currentState),
                                 padding: [4, 4, 4, 4]
@@ -1156,13 +1185,13 @@ export function Topology(props) {
                     label: lirNodeId,
                     x: x,
                     y: y,
-                    size: 40,
+                    size: figuresize,
                     img: "./pictures/lirNode.png",
                     labelCfg: {
                         position: 'bottom',
                         style: {
                             fill: '#ffffff', // 设置字体颜色
-                            fontSize: 14,
+                            fontSize: fontsize,
                             background: {
                                 fill: ReturnLableColor(currentState),
                                 padding: [4, 4, 4, 4]
@@ -1182,13 +1211,13 @@ export function Topology(props) {
                     label: fabricPeerNodeId,
                     x: x,
                     y: y,
-                    size: 40,
+                    size: figuresize,
                     img: "./pictures/fabricPeerNode.png",
                     labelCfg: {
                         position: 'bottom',
                         style: {
                             fill: '#ffffff', // 设置字体颜色
-                            fontSize: 14,
+                            fontSize: fontsize,
                             background: {
                                 fill: ReturnLableColor(currentState),
                                 padding: [4, 4, 4, 4]
@@ -1197,7 +1226,7 @@ export function Topology(props) {
                     }
                 }
                 graph.addItem("node", fabricPeerNode)
-                return [...prevFabricPeerNodes, fabricPeerNode]
+                return [...prevFabricPeerNodes, fabricPeerNodeId]
             })
             successfullyAdd = true
         } else if(nodeType === "FabricOrderNode"){
@@ -1208,13 +1237,13 @@ export function Topology(props) {
                     label: fabricOrderNodeId,
                     x: x,
                     y: y,
-                    size: 40,
+                    size: figuresize,
                     img: "./pictures/fabricOrderNode.png",
                     labelCfg: {
                         position: 'bottom',
                         style: {
                             fill: '#ffffff', // 设置字体颜色
-                            fontSize: 14,
+                            fontSize: fontsize,
                             background: {
                                 fill: ReturnLableColor(currentState),
                                 padding: [4, 4, 4, 4]
@@ -1223,9 +1252,35 @@ export function Topology(props) {
                     }
                 }
                 graph.addItem("node", fabricOrderNode)
-                return [...prevFabricOrderNodes, fabricOrderNode]
+                return [...prevFabricOrderNodes, fabricOrderNodeId]
             })
             successfullyAdd = true
+        } else if (nodeType === "FiscoBcosNode") {
+          setFiscoBcosNodes(prevFiscoBcosNodes => {
+              let fiscoBcosNodeId = nodeType + "_" + (prevFiscoBcosNodes.length + 1)
+              let fiscoBcosNode = {
+                  id: fiscoBcosNodeId,
+                  label: fiscoBcosNodeId,
+                  x: x,
+                  y: y,
+                  size: figuresize,
+                  img: "./pictures/fisco-bcos.png",
+                  labelCfg: {
+                      position: 'bottom',
+                      style: {
+                          fill: "#ffffff",
+                          fontSize: fontsize,
+                          background: {
+                              fill: ReturnLableColor(currentState),
+                              padding: [4, 4, 4, 4]
+                          }
+                      }
+                  }
+              }
+              graph.addItem("node", fiscoBcosNode)
+              return [...prevFiscoBcosNodes, fiscoBcosNodeId]
+          })
+          successfullyAdd = true
         } else {
             console.log("unsupported node type")
         }
@@ -1622,13 +1677,13 @@ export function Topology(props) {
     // 25. 实际的 HTML 代码
     // ---------------------------------------------------------------------------------------------
     return (
-        <div>
+        <div className="topology-container" style={{position: "relative"}}>
             {/*空行*/}
-            <Row style={{height: "10px", marginLeft: "1vw", marginRight: "1vw"}}>
+            <Row style={{height: "13vh", marginLeft: "1vw", marginRight: "1vw"}}>
 
             </Row>
-            <Row>
-                <Col span={14}>
+            <Row style={{flex: 1, display: "flex", flexDirection: "row", height: "calc(100vh - 5vh)"}}>
+                <Col span={14} style={{display: "flex", flexDirection: "column"}}>
                     <Card
                         size={"small"}
                         title={"拓扑配置"}
@@ -1705,7 +1760,7 @@ export function Topology(props) {
                     <Row style={{marginLeft: "1vw", marginRight: "1vw"}}>
                         <Col span={12}>
                             <Card
-                                size={"small"}
+                                size={"large"}
                                 title={"区块链系统配置"}
                             >
                                 {/*注意 Form 是可以当成一行的*/}
@@ -1953,7 +2008,7 @@ export function Topology(props) {
 
                         <Col span={11}>
                             <Card
-                                size={"small"}
+                                size={"large"}
                                 title={"攻击配置"}
                             >
                                 <Form
@@ -2052,9 +2107,9 @@ export function Topology(props) {
                                                 <Select value={selectedAttackedNode}
                                                         disabled={currentAttackState}
                                                         // options={fabricOrderNodes}
-                                                    options={fabricOrderNodes.map((fabricOrderNode) => ({
-                                                            label: fabricOrderNode.id,
-                                                            value: fabricOrderNode.id,
+                                                    options={[...chainMakerNodes, ...fabricOrderNodes].map((node) => ({
+                                                            label: node,
+                                                            value: node,
                                                         }))}
                                                 >
                                                 </Select>
@@ -2147,14 +2202,15 @@ export function Topology(props) {
                         </Col>
                     </Row>
                     <Row style={{height: "1vh"}}></Row>
-                    <Row style={{marginLeft: "1vw", marginRight: "1vw"}}>
-                        <Col span={24}>
+                    <Row style={{marginLeft: "1vw", marginRight: "1vw", flex: 1, display: "flex", flexDirection: "column"}}>
+                        <Col span={24} style={{flex: 1, display: "flex", flexDirection: "column"}}>
                             <Card
                                 size={"small"}
+                                style={{flex: 1, display: "flex", flexDirection: "column"}}
                             >
                                 <ReactECharts
                                     option={rateOption}
-                                    style={{height: "26vh", width: "100%"}}
+                                    style={{flex: 1, width: "100%"}}
                                 >
                                 </ReactECharts>
                             </Card>
@@ -2163,13 +2219,17 @@ export function Topology(props) {
                 </Col>
 
                 {/*右侧的拓扑展示界面*/}
-                <Col span={10}>
+                <Col span={10} className="graph-container">
                     <Row style={{marginLeft: "1vw", marginRight: "1vw", height: "100%"}}>
                         <div ref={graphDivRef} id="graph"
-                             style={{backgroundColor: "grey", width: "100%", height: "100%"}}>
+                             style={{backgroundColor: "#181c41", width: "100%", height: "100%"}}>
                         </div>
                     </Row>
                 </Col>
+            </Row>
+
+            <Row style={{height: "1vh", marginLeft: "1vw", marginRight: "1vw"}}>
+
             </Row>
             {/*提示框*/}
             <Modal

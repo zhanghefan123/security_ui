@@ -1,0 +1,139 @@
+/* Instance 页面样式 */
+
+/* 确保页面占满整个视口高度 */
+.instance-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    /* 背景图设置 */
+    background-image: url('../../public/pictures/background.png'); /* 请将图片放在public/pictures/目录下 */
+    background-size: cover; /* 覆盖整个容器 */
+    background-position: center; /* 居中显示 */
+    background-repeat: no-repeat; /* 不重复 */
+    background-attachment: fixed; /* 固定背景，滚动时不动 */
+    color: #ffffff;
+}
+
+/* 如果背景图太亮影响内容可读性，可以添加半透明遮罩 */
+.instance-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.3); /* 黑色半透明遮罩，透明度0.3 */
+    z-index: -1; /* 确保在内容下方 */
+}
+
+/* 图表容器样式 */
+.chart-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Card 组件深色样式 */
+.ant-card {
+    background-color: rgba(24, 28, 65, 0.9) !important;
+    border-color: #404040 !important;
+    color: #ffffff !important;
+}
+
+.ant-card-head {
+    background-color: rgba(24, 28, 65, 0.9) !important;
+    border-bottom-color: #404040 !important;
+}
+
+.ant-card-head-title {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    font-size: 16px !important;
+}
+
+.ant-card-body {
+    color: #ffffff !important;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Tabs 组件深色样式 */
+.ant-tabs {
+    color: #ffffff !important;
+}
+
+.ant-tabs-tab {
+    background-color: rgba(50, 50, 50, 0.9) !important;
+    border-color: #404040 !important;
+    color: #ffffff !important;
+}
+
+.ant-tabs-tab:hover {
+    background-color: rgba(70, 70, 70, 0.9) !important;
+    color: #ffffff !important;
+}
+
+.ant-tabs-tab-active {
+    background-color: #1890ff !important;
+    border-color: #1890ff !important;
+    color: #ffffff !important;
+}
+
+.ant-tabs-tab-btn {
+    color: inherit !important;
+}
+
+.ant-tabs-content-holder {
+    background-color: rgba(30, 30, 30, 0.9) !important;
+    color: #ffffff !important;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.ant-tabs-tabpane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* 滚动条深色样式 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(30, 30, 30, 0.9);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(100, 100, 100, 0.8);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(120, 120, 120, 0.8);
+}
+
+/* 确保图表容器正确显示 */
+.echarts-for-react {
+    flex: 1 !important;
+    min-height: 0 !important;
+}
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+    .instance-container {
+        padding: 8px;
+    }
+    
+    .ant-col {
+        margin-bottom: 8px;
+    }
+}

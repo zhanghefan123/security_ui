@@ -68,6 +68,7 @@ export const stopTopology = (response_callback, error_callback) => {
 
 // getTopologyState 获取拓扑状态
 export const getTopologyState = (response_callback, error_callback) => {
+    console.log(`${UrlBase}/${getTopologyStateUrl}`)
     axios.post(`${UrlBase}/${getTopologyStateUrl}`).then(response=>{
         response_callback(response)
     }, (error)=>{

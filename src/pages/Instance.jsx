@@ -1,8 +1,9 @@
 import {Card, Row, Tabs, Typography, message, Col, Button} from "antd";
-import {useEffect, useState} from "react";
+import React, {useEffect, useState} from "react";
 import {startWebShell, stopWebShell, startCaptureInterfaceRate, stopCaptureInterfaceRate} from "../requests/instance"
 import {useParams} from "react-router-dom";
 import ReactECharts from 'echarts-for-react'
+import './Instance.css'
 
 export function Instance(props) {
 
@@ -162,7 +163,8 @@ export function Instance(props) {
         },
         grid: {
             left: "100px",
-            right: "80px"
+            right: "80px",
+            bottom: "20px"
         },
         tooltip: {
             trigger: "axis"
@@ -171,6 +173,7 @@ export function Instance(props) {
             data:['节点被攻击速率'],
             textStyle: {
                 fontSize: 15, // 图例字体大小
+                color:  "red"
             }
         },
         xAxis: {
@@ -215,7 +218,8 @@ export function Instance(props) {
         },
         grid: {
             left: "100px",
-            right: "80px"
+            right: "80px",
+            bottom: "20px"
         },
         tooltip: {
             trigger: "axis"
@@ -223,7 +227,9 @@ export function Instance(props) {
         legend: {
             data:['节点被攻击速率', "区块高度百分比"],
             textStyle: {
-                fontSize: 15, // 图例字体大小
+                fontSize: 15, // 图例字体大小,
+                // 定义富文本样式
+                color: "rgb(22,237,240)"
             }
         },
         xAxis: {
@@ -245,7 +251,8 @@ export function Instance(props) {
                     fontSize: 15
                 },
                 nameTextStyle: {
-                    fontSize: 20
+                    fontSize: 20,
+                    color: "red"
                 }
             },
             {
@@ -256,7 +263,8 @@ export function Instance(props) {
                     fontSize: 15
                 },
                 nameTextStyle: {
-                    fontSize: 20
+                    fontSize: 20,
+                    color: "blue"
                 }
             }
         ],
@@ -297,7 +305,8 @@ export function Instance(props) {
         },
         grid: {
             left: "80px",
-            right: "80px"
+            right: "80px",
+            bottom: "20px"
         },
         tooltip: {
             trigger: "axis"
@@ -306,6 +315,7 @@ export function Instance(props) {
             data:['节点 CPU 利用率', "节点内存"],
             textStyle: {
                 fontSize: 15, // 图例字体大小
+                color: "rgb(22,237,240)"
             }
         },
         xAxis: {
@@ -315,7 +325,7 @@ export function Instance(props) {
                 fontSize: 15
             },
             nameTextStyle: {
-                fontSize: 20
+                fontSize: 20,
             }
         },
         yAxis: [
@@ -328,7 +338,8 @@ export function Instance(props) {
                     fontSize: 15
                 },
                 nameTextStyle: {
-                    fontSize: 20
+                    fontSize: 20,
+                    color: "red"
                 },
             },
             {
@@ -340,7 +351,8 @@ export function Instance(props) {
                     fontSize: 15
                 },
                 nameTextStyle: {
-                    fontSize: 20
+                    fontSize: 20,
+                    color: "blue"
                 },
             },
         ],
@@ -380,15 +392,17 @@ export function Instance(props) {
         },
         grid: {
             left: "80px",
-            right: "80px"
+            right: "80px",
+            bottom: "20px"
         },
         tooltip: {
             trigger: "axis"
         },
         legend: {
-            data:['TCP 已建立连数', "TCP 半开连接数"],
+            data:['TCP 已建立连接数', "TCP 半开连接数"],
             textStyle: {
                 fontSize: 15, // 图例字体大小
+                color: "rgb(22,237,240)"
             }
         },
         xAxis: {
@@ -403,7 +417,7 @@ export function Instance(props) {
         },
         yAxis: [
             {
-                name: "TCP 已建立连数",
+                name: "TCP 已建立连接数",
                 type: "value",
                 position: "left",
                 axisLabel: {
@@ -411,7 +425,8 @@ export function Instance(props) {
                     fontSize: 15
                 },
                 nameTextStyle: {
-                    fontSize: 20
+                    fontSize: 20,
+                    color: "purple"
                 },
             },
             {
@@ -423,7 +438,8 @@ export function Instance(props) {
                     fontSize: 15
                 },
                 nameTextStyle: {
-                    fontSize: 20
+                    fontSize: 20,
+                    color: "orange"
                 },
             },
         ],
@@ -464,7 +480,8 @@ export function Instance(props) {
         },
         grid: {
             left: "80px",
-            right: "80px"
+            right: "80px",
+            bottom: "20px"
         },
         tooltip: {
             trigger: "axis"
@@ -473,6 +490,7 @@ export function Instance(props) {
             data:['共识超时次数', "总线消息数量"],
             textStyle: {
                 fontSize: 15, // 图例字体大小
+                color: "rgb(22,237,240)"
             }
         },
         xAxis: {
@@ -495,7 +513,8 @@ export function Instance(props) {
                     fontSize: 15
                 },
                 nameTextStyle: {
-                    fontSize: 20
+                    fontSize: 20,
+                    color: "purple"
                 },
             },
             {
@@ -507,7 +526,8 @@ export function Instance(props) {
                     fontSize: 15
                 },
                 nameTextStyle: {
-                    fontSize: 20
+                    fontSize: 20,
+                    color: "orange"
                 },
             },
         ],
@@ -556,57 +576,72 @@ export function Instance(props) {
 
 
     return (
-        <div>
-            <Row justify={"center"}>
-                <Col span={12}>
+        <div className="instance-container" style={{position: "relative", padding: "8px"}}>
+            <Row style={{height: "12vh", marginLeft: "1vw", marginRight: "1vw"}}>
+
+            </Row>
+            <Row justify={"center"} style={{flex: 1, marginBottom: "8px"}}>
+                <Col span={12} style={{height: "100%", paddingRight: "4px"}}>
                     <Card
                         size={"small"}
+                        style={{height: "100%", display: "flex", flexDirection: "column"}}
+                        bodyStyle={{padding: "8px"}}
                     >
                         <ReactECharts
                             option={echartOption()}
-                            style={{height: "30vh", width: "100%"}}
+                            style={{flex: 1, width: "100%", minHeight: "400px"}}
                         >
                         </ReactECharts>
                     </Card>
                 </Col>
-                <Col span={12}>
+                <Col span={12} style={{height: "100%", paddingLeft: "4px"}}>
                     <Card
                         size={"small"}
+                        style={{height: "100%", display: "flex", flexDirection: "column"}}
+                        bodyStyle={{padding: "8px"}}
                     >
                         <ReactECharts
                             option={cpuAndMemoryRateOption}
-                            style={{height: "30vh", width: "100%"}}
+                            style={{flex: 1, width: "100%", minHeight: "400px"}}
                         >
                         </ReactECharts>
                     </Card>
                 </Col>
             </Row>
-            <Row justify={"center"}>
-                <Col span={12}>
+            <Row justify={"center"} style={{flex: 1, marginBottom: "8px"}}>
+                <Col span={12} style={{height: "100%", paddingRight: "4px"}}>
                     <Card
-                    size={"small"}>
+                        size={"small"}
+                        style={{height: "100%", display: "flex", flexDirection: "column"}}
+                        bodyStyle={{padding: "8px"}}
+                    >
                         <ReactECharts
-                        option={tcpConnectedAndHalfConnectedOption}
-                        style={{height: "30vh", width: "100%"}}>
+                            option={tcpConnectedAndHalfConnectedOption}
+                            style={{flex: 1, width: "100%", minHeight: "400px"}}
+                        >
                         </ReactECharts>
                     </Card>
                 </Col>
-                <Col span={12}>
+                <Col span={12} style={{height: "100%", paddingLeft: "4px"}}>
                     <Card
-                        size={"small"}>
+                        size={"small"}
+                        style={{height: "100%", display: "flex", flexDirection: "column"}}
+                        bodyStyle={{padding: "8px"}}
+                    >
                         <ReactECharts
                             option={timeoutAndMessageCountOption}
-                            style={{height: "30vh", width: "100%"}}>
+                            style={{flex: 1, width: "100%", minHeight: "400px"}}
+                        >
                         </ReactECharts>
                     </Card>
                 </Col>
             </Row>
-            <Row justify={"center"} style={{width: "100%"}}>
-                <Col span={24}>
-                    <Card style={{height:"50vh"}}>
+            {/* <Row justify={"center"} style={{flex: 1, width: "100%"}}>
+                <Col span={24} style={{height: "100%"}}>
+                    <Card style={{height: "100%", display: "flex", flexDirection: "column"}}>
                         <Tabs
                             type="editable-card"
-                            style={{width:"100%", height: "50vh"}}
+                            style={{flex: 1, width: "100%", display: "flex", flexDirection: "column"}}
                             activeKey={activeTab}
                             onChange={(newActiveKey)=>{
                                 setActiveTab(newActiveKey)
@@ -626,7 +661,7 @@ export function Instance(props) {
                         />
                     </Card>
                 </Col>
-            </Row>
+            </Row> */}
         </div>
     )
 }
