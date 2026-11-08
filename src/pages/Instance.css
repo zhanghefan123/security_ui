@@ -10,9 +10,12 @@
     background-size: cover; /* 覆盖整个容器 */
     background-position: center; /* 居中显示 */
     background-repeat: no-repeat; /* 不重复 */
-    background-attachment: fixed; /* 固定背景，滚动时不动 */
+    background-attachment: scroll; /* 改为scroll，避免固定背景导致的显示问题 */
+    overflow: hidden; /* 防止内容溢出 */
     color: #ffffff;
 }
+
+
 
 /* 如果背景图太亮影响内容可读性，可以添加半透明遮罩 */
 .instance-container::before {

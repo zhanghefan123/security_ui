@@ -14,29 +14,76 @@ html, body, #root {
     overflow: hidden;
 }
 
+.title {
+    /* width: 100%; */
+    font-size: 3.3rem;
+    line-height: 3.5rem;
+    color: rgba(14, 253, 255, 1);
+    text-align: center;
+    font-weight: bold;
+}
+
 /* Ensure the topology container takes full height */
 .topology-container {
     height: 100vh;
     display: flex;
     flex-direction: column;
-    /* 背景图设置 */
-    background-image: url('../../public/pictures/background.png'); /* 请将图片放在public/pictures/目录下 */
-    background-size: cover; /* 覆盖整个容器 */
-    background-position: center; /* 居中显示 */
-    background-repeat: no-repeat; /* 不重复 */
-    background-attachment: fixed; /* 固定背景，滚动时不动 */
+    background-color: #151c38;
+    background-image:
+        radial-gradient(ellipse at 50% 0%, rgba(0, 194, 224, 0.18), transparent 55%),
+        linear-gradient(rgba(66, 164, 208, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(66, 164, 208, 0.05) 1px, transparent 1px);
+    background-size: 100% 100%, 48px 48px, 48px 48px;
+    overflow: hidden; /* 防止内容溢出 */
 }
 
-/* 如果背景图太亮影响内容可读性，可以添加半透明遮罩 */
-.topology-container::before {
+.topology-container-topology-only {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    /* 背景图设置 */
+    background-image: url('../../public/pictures/background_new.png'); /* 请将图片放在public/pictures/目录下 */
+    background-size: cover; /* 覆盖整个容器 */
+    background-position: center top; /* 从顶部开始显示，确保顶部不被截断 */
+    background-repeat: no-repeat; /* 不重复 */
+    background-attachment: scroll; /* 改为scroll，避免fixed导致的显示问题 */
+    overflow: hidden; /* 防止内容溢出 */
+}
+
+.topology-system-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 18.5vh;
+    min-height: 84px;
+    margin: 0 1vw;
+    padding: 12px 24px;
+    text-align: center;
+    background: radial-gradient(ellipse at center, rgba(13, 112, 165, 0.16), transparent 70%);
+}
+
+.topology-system-header h1 {
+    margin: 0;
+    color: #7deeff;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    font-size: clamp(20px, 2.5vw, 48px);
+    font-weight: 700;
+    line-height: 1.5;
+    letter-spacing: 0.08em;
+    text-shadow: 0 0 24px rgba(0, 204, 255, 0.35);
+}
+
+.topology-system-header::after {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.3); /* 黑色半透明遮罩，透明度0.3 */
-    z-index: -1; /* 确保在内容下方 */
+    right: 5%;
+    bottom: 8px;
+    left: 5%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #1b7196 20%, #64e7f8 50%, #1b7196 80%, transparent);
+    box-shadow: 0 4px 18px rgba(0, 204, 255, 0.15);
+    pointer-events: none;
 }
 
 /* Ensure the graph container takes available space */

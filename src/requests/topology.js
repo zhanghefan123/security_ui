@@ -10,6 +10,7 @@ const getManetTopologyUrl = "/topologies/path_validation_topology.txt"
 const startAttackRequestUrl = "startAttack"
 const startTxRateTestUrl = "startTxRateTest"
 const stopTxRateTestUrl = "stopTxRateTest"
+const getTxRateTestUrl = "getTxRateTest"
 const installChannelAndChaincodeUrl = "installChannelAndChaincode"
 const saveTopologyUrl = "saveTopology"
 const getTopologyDescriptionUrl = "getTopologyDescription"
@@ -19,6 +20,8 @@ const startAttackUrl = "/start_attack"
 const stopAttackUrl = "/stop_attack"
 const startMaliciousSynchoronizeUrl = "/start_malicious_synchronize"
 const stopMaliciousSynchronizeUrl = "/stop_malicious_synchronize"
+const startInconsistentHeartbeatAttackUrl = "/start_inconsistent_heart_beat_attack"
+const stopInconsistentHeartbeatAttackUrl = "/stop_inconsistent_heart_beat_attack"
 
 export const changeStartDefenceRequest = (params, response_callback, error_callback) => {
     axios.post(`${UrlBase}/${changeStartDefenceUrl}`, params).then((response)=>{
@@ -132,6 +135,14 @@ export const stopTxRateTest = (response_callback, error_callback) => {
     })
 }
 
+export const GetTxRateTest = (response_callback, error_callback) => {
+    axios.post(`${UrlBase}/${getTxRateTestUrl}`).then((response)=>{
+        response_callback(response)
+    }, (error)=>{
+        error_callback(error)
+    })
+}
+
 
 // installChannelAndChaincode 安装 channel 和链码
 export const installChannelAndChaincode = (response_callback, error_callback) => {
@@ -181,6 +192,24 @@ export const startMaliciousSynchronize = (port, response_callback, error_callbac
 
 export const stopMaliciousSynchronize = (port, response_callback, error_callback) => {
     let urlTmp = `http://${topologyServerAddr}:${port}${stopMaliciousSynchronizeUrl}`
+    axios.post(urlTmp).then((response)=>{
+        response_callback(response)
+    }, (error)=>{
+        error_callback(error)
+    })
+}
+
+export const startInconsistentHeartbeatAttack = (port, response_callback, error_callback) => {
+    let urlTmp = `http://${topologyServerAddr}:${port}${startInconsistentHeartbeatAttackUrl}`
+    axios.post(urlTmp).then((response)=>{
+        response_callback(response)
+    }, (error)=>{
+        error_callback(error)
+    })
+}
+
+export const stopInconsistentHeartbeatAttack = (port, response_callback, error_callback) => {
+    let urlTmp = `http://${topologyServerAddr}:${port}${stopInconsistentHeartbeatAttackUrl}`
     axios.post(urlTmp).then((response)=>{
         response_callback(response)
     }, (error)=>{

@@ -28,7 +28,7 @@ export function Instance(props) {
     // 3. 上来就加载一个默认的界面
     useEffect(() => {
         // 3.1 为相应的容器开启第一个 webshell
-        AddWebShellLogic()
+        // AddWebShellLogic()
 
         // 3.2 开启抓包线程
         captureTimer = setInterval(()=>{
@@ -61,6 +61,7 @@ export function Instance(props) {
             setMemoryList(response.data["memory_list"])
             if (response.data["block_ratio_list"]){
                 setBlockRatioList(response.data["block_ratio_list"])
+                console.log("block_ratio_list:", response.data["block_ratio_list"])
             }
             if (response.data["connected_count_list"]) {
                 setConnectedList(response.data["connected_count_list"])
@@ -85,7 +86,8 @@ export function Instance(props) {
         let params = {
             container_name: containerName.replace("_", "-")
         }
-        stopCaptureInterfaceRate(params)
+        // 暂时关闭 -> 因为后台是一直保持启动的状态
+        // stopCaptureInterfaceRate(params)
     }
 
     // 6. 添加webshell的逻辑
@@ -565,8 +567,9 @@ export function Instance(props) {
     let echartOption = ()=>{
         let isChainMaker = containerName.indexOf("ChainMaker") !== -1
         let isFabric = containerName.indexOf("FabricOrder") !== -1
-        if (isChainMaker || isFabric) {
-            console.log("is blockchain")
+        let isFiscoBcos = containerName.indexOf("FiscoBcos") !== -1
+        if (isChainMaker || isFabric || isFiscoBcos) {
+            console.log("is blockchain") // 如果是区块链类型还需要显示 interfaceRateAndRatioOption
             return interfaceRateAndRatioOption
         } else {
             console.log("is not blockchain")
