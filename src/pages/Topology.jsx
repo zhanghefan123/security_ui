@@ -6,6 +6,7 @@ import "./TopologyWorkbench.css";
 import {Node} from "../entities/node"
 import {Link} from "../entities/link"
 import {readTopologyStateParams} from "../entities/topology_state"
+import {createTopologySelectionStyles, TOPOLOGY_SELECTED_STATE} from "../entities/topology_graph_styles";
 import {
     changeStartDefenceRequest,
     getStopProgress,
@@ -462,6 +463,7 @@ export function Topology(props) {
 
         // 进行图的实例化
         const graphTmp = new G6.Graph({
+            ...createTopologySelectionStyles(),
             container: 'graph', // html 元素的 id
             // 图的宽度以及高度
             width: graphDivRef.current.clientWidth,
@@ -490,7 +492,12 @@ export function Topology(props) {
             },
             // 可用的模式: 允许拖拽画布、放缩画布、拖拽节点
             modes: {
-                default: ['create-edge', 'drag-canvas', 'zoom-canvas', 'drag-node', 'brush-select'],
+                // default: ['create-edge', 'drag-canvas', 'zoom-canvas', 'drag-node', 'brush-select'],
+                default: [
+                    'create-edge', 'drag-canvas', 'zoom-canvas',
+                    {type: 'drag-node', selectedState: TOPOLOGY_SELECTED_STATE},
+                    {type: 'brush-select', selectedState: TOPOLOGY_SELECTED_STATE},
+                ],
             },
         });
         // 数据的加载
