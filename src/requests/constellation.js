@@ -5,6 +5,7 @@ const getConstellationStateUrl = "getConstellationState"
 const getInstancePositionsUrl = "getInstancePositions"
 const startConstellationUrl = "startConstellation"
 const stopConstellationUrl = "stopConstellation"
+const getStopProgressUrl = "getStopProgress"
 const getAvailableGroundStationsUrl = "/ground_stations/ground_stations.txt"
 const changeTimeStepUrl= "changeTimeStep"
 
@@ -51,6 +52,14 @@ export const startConstellationRequest = (params, response_callback, error_callb
 
 export const stopConstellationRequest = (response_callback, error_callback) => {
     axios.post(`${UrlBase}/${stopConstellationUrl}`).then((response) => {
+        response_callback(response)
+    }, (error)=>{
+        error_callback(error)
+    })
+}
+
+export const getStopProgressRequest = (operation, response_callback, error_callback) => {
+    axios.post(`${UrlBase}/${getStopProgressUrl}`, null, {params: {operation}}).then((response) => {
         response_callback(response)
     }, (error)=>{
         error_callback(error)

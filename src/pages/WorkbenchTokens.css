@@ -1,0 +1,21 @@
+/* Shared readable sizing, scoped to the two workbenches and their popups. */
+:is(.topology-workbench, .constellation-workbench, .topology-dialog, .constellation-dialog, .constellation-select-dropdown) {
+    --ui-body: clamp(0.875rem, 0.82rem + 0.15vw, 1rem);
+    --ui-caption: clamp(0.75rem, 0.72rem + 0.08vw, 0.8125rem);
+    --ui-heading: clamp(1rem, 0.94rem + 0.16vw, 1.125rem);
+    --ui-title: clamp(1.125rem, 0.95rem + 0.7vw, 1.875rem);
+    --ui-control: clamp(2.5rem, 2.25rem + 0.3vw, 2.875rem);
+    --ui-gap: clamp(1rem, 0.8rem + 0.3vw, 1.375rem);
+    --ui-padding: clamp(1rem, 0.8rem + 0.35vw, 1.5rem);
+    font-size: var(--ui-body);
+    line-height: 1.6;
+}
+
+:is(.topology-workbench, .constellation-workbench) .ant-select-single .ant-select-selector :is(.ant-select-selection-item, .ant-select-selection-placeholder) {
+    line-height: calc(var(--ui-control) - 2px);
+    font-size: var(--ui-body);
+}
+
+:is(.topology-workbench, .constellation-workbench) .ant-form-item-explain {
+    overflow-wrap: anywhere;
+}

@@ -1,13 +1,14 @@
 import * as G6 from "@antv/g6";
 import React, {useEffect, useRef, useState} from "react";
-import {Button, Card, Col, Form, Input, message, Modal, Row, Select, Switch, Table, Upload} from "antd";
+import {Alert, Button, Card, Col, Form, Input, message, Modal, Row, Select, Switch, Table, Upload} from "antd";
 import "./Topology.css";
 import {Node} from "../entities/node"
 import {Link} from "../entities/link"
+import {readTopologyStateParams} from "../entities/topology_state"
 import {
     changeStartDefenceRequest,
     getTopologyState, GetTxRateTest, installChannelAndChaincode,
-    pageClose, saveTopologyRequest, startAttack,
+    saveTopologyRequest, startAttack,
     startAttackRequest, startMaliciousSynchronize,
     startTopology,
     startTxRateTest, stopAttack, stopMaliciousSynchronize, stopNode,
@@ -196,6 +197,7 @@ export function TopologyOnly(props) {
     // 5. 拓扑状态
     // ---------------------------------------------------------------------------------------------
     const [currentTopologyState, setCurrentTopologyState] = useState(false)
+    const [topologyNeedsCleanup, setTopologyNeedsCleanup] = useState(false)
     const [currentChannelChaincodeState, setCurrentChannelChaincodeState] = useState(false)
     const [currentAttackState, setCurrentAttackState] = useState(false)
     const [routers, setRouters] = useState([])
@@ -220,7 +222,7 @@ export function TopologyOnly(props) {
     // ---------------------------------------------------------------------------------------------
     const [timeList, setTimeList] = useState([1, 2, 3])
     const [currentTps, setCurrentTps] = useState([1, 2, 3])
-    const [txRateTimer, setTxRateTimer] = useState()
+
     // ---------------------------------------------------------------------------------------------
 
     // 8. 参数表格
@@ -346,19 +348,8 @@ export function TopologyOnly(props) {
     // ---------------------------------------------------------------------------------------------
     useEffect(() => {
 
-        let beforeTime = 0, leaveTime = 0;
+        // Topology lifetime belongs to the backend; reloads must not stop it.
 
-        let beforeUnloadFunction = () => {
-            beforeTime = new Date().getTime()
-        }
-
-        // 当 leaveTime <= 5 的时候, 可以判断用户是直接进行了页面的关闭
-        let unloadFunction = () => {
-            leaveTime = new Date().getTime() - beforeTime
-            if (leaveTime <= 5) {
-                pageClose();
-            }
-        }
 
         // 窗口大小改变时的处理函数
         let resizeFunction = () => {
@@ -369,21 +360,13 @@ export function TopologyOnly(props) {
             }
         }
 
-        // 注册回调函数, 回调函数在 beforeunload 和 unload 事件发生的时候被调用
-        window.addEventListener("beforeunload", beforeUnloadFunction)
-        window.addEventListener("unload", unloadFunction)
         window.addEventListener("resize", resizeFunction)
 
         // 在结束的时候进行卸载
         return () => {
             // 进行监听器的删除
-            window.removeEventListener("beforeunload", beforeUnloadFunction)
-            window.removeEventListener("unload", unloadFunction)
             window.removeEventListener("resize", resizeFunction)
             // 进行 timer 的删除
-            if (txRateTimer) {
-                clearInterval(txRateTimer)
-            }
         }
     }, [graph]);
     // ---------------------------------------------------------------------------------------------
@@ -478,9 +461,9 @@ export function TopologyOnly(props) {
 
     // 15. 组件初始化的的第三步 - 进行图的状态的获取
     // ---------------------------------------------------------------------------------------------
-    useEffect(() => {
-        if (createGraph === 1) {
+    function refreshTopologyState() {
             getTopologyState((response) => {
+                if (!graph || graph.destroyed) return;
 
                 let container_name_to_port_mapping = response.data["container_name_to_port_mapping"]
                 setContainerNameToPortMapping(container_name_to_port_mapping)
@@ -490,22 +473,38 @@ export function TopologyOnly(props) {
                 setTopologyOptionsWithTopologyNames(all_topology_names)
 
                 if (response.data["state"] === "up") {
+                    setCurrentTopologyState(true);
+                    setTopologyNeedsCleanup(false);
+                    let restored;
+                    try {
+                        restored = readTopologyStateParams(response.data["topology_params"]);
+                    } catch (error) {
+                        message.error({content: error.message});
+                        return;
+                    }
+                    setSelectedBlockchain(restored.blockchainType);
+                    setAvailableConsensusTypes(consensusTypes[restored.blockchainType] || [restored.consensusType]);
+                    setSelectedConsensusType(restored.consensusType);
+                    setSelectedConsensusNodeCpuLimit(restored.cpuLimit);
+                    setSelectedConsensusNodeMemoryLimit(restored.memoryLimit);
+                    setSelectedConsensusThreadCount(restored.consensusThreadCount);
                     startTopologyForm.setFieldsValue({
-                        [networkTopologyField[0]]: response.data["topology_params"]["network_env"],
-                        [blockchainTypeField[0]]: response.data["topology_params"]["blockchain_type"],
-                        [consensusTypeField[0]]: response.data["topology_params"]["consensus_type"],
-                        [accessLinkBandwidthField[0]]: response.data["topology_params"]["access_link_bandwidth"],
-                        [consensusNodeCpuField[0]]: response.data["topology_params"]["consensus_node_cpu"],
-                        [consensusNodeMemoryField[0]]: response.data["topology_params"]["consensus_node_memory"],
-                        [consensusThreadCountField[0]]: response.data["topology_params"]["consensus_thread_count"],
-                    })
-                    setCurrentTopologyState(true)
-                    setStartDefence(response.data["topology_params"]["start_defence"])
-
-                    // rebuildGraph(response.data["topology_params"], true)
-                    rebuildGraphWithLinkParams(response.data["topology_params"], response.data["links"], true)
-                    // rebuildGraph(response.data["topology_params"], true)
+                        [blockchainTypeField[0]]: restored.blockchainType,
+                        [consensusTypeField[0]]: restored.consensusType,
+                        [consensusNodeCpuField[0]]: restored.cpuLimit,
+                        [consensusNodeMemoryField[0]]: restored.memoryLimit,
+                        [consensusThreadCountField[0]]: restored.consensusThreadCount,
+                    });
+                    setCurrentTopologyState(true);
+                    setStartDefence(restored.startDefence);
+                    rebuildGraphWithLinkParams(restored.topology, response.data["links"], true);
+                } else if (response.data["state"] === "failed" || response.data.cleanup_required) {
+                    setCurrentTopologyState(true);
+                    setTopologyNeedsCleanup(true);
+                    setTxRateTestStatus(false);
+                    message.error({content: response.data.message || "拓扑清理未完成，请点击停止拓扑重试清理"});
                 } else if (response.data["state"] === "down") {
+                    setTopologyNeedsCleanup(false);
                     setCurrentTopologyState(false)
                 } else {
                     message.error({
@@ -518,7 +517,10 @@ export function TopologyOnly(props) {
                     content: "could not get the status from the backend server"
                 })
             })
-        }
+    }
+
+    useEffect(() => {
+        if (createGraph === 1) refreshTopologyState();
     }, [createGraph]);
 
 
@@ -527,7 +529,7 @@ export function TopologyOnly(props) {
         clearState()
         for (let i = 0; i < topology_params["nodes"].length; i++) {
             let node = topology_params["nodes"][i]
-            AddNodeLogic(node["type"], node["x"], node["y"], state)
+            AddNodeLogic(node["type"], node["x"], node["y"], state, node["index"])
         }
         setTimeout(() => {
             for (let i = 0; i < topology_params["links"].length; i++) {
@@ -617,7 +619,7 @@ export function TopologyOnly(props) {
         clearState()
         for (let i = 0; i < topology_params["nodes"].length; i++) {
             let node = topology_params["nodes"][i]
-            AddNodeLogic(node["type"], node["x"], node["y"], state)
+            AddNodeLogic(node["type"], node["x"], node["y"], state, node["index"])
         }
         setTimeout(() => {
             for (let i = 0; i < topology_params["links"].length; i++) {
@@ -878,7 +880,7 @@ export function TopologyOnly(props) {
                 network_env: formValues[networkTopologyField[0]] || selectedNetworkTopology,
                 blockchain_type: formValues[blockchainTypeField[0]] || selectedBlockchain,
                 consensus_type: formValues[consensusTypeField[0]] || selectedConsensusType,
-                access_link_bandwidth: formValues[accessLinkBandwidthField[0]] || selectedAccessLinkBandwidth,
+
                 consensus_node_cpu: formValues[consensusNodeCpuField[0]] || selectedConsensusNodeCpuLimit,
                 consensus_node_memory: formValues[consensusNodeMemoryField[0]] || selectedConsensusNodeMemoryLimit,
                 consensus_thread_count: formValues[consensusThreadCountField[0]] || selectedConsensusThreadCount,
@@ -897,9 +899,11 @@ export function TopologyOnly(props) {
                 window.location.reload() // 进行页面的强制刷新
             }, (error) => {
                 message.error({
-                    content: `start topology error ${error}`
+                    content: error.response?.data?.message || `start topology error ${error}`
                 })
-                setCurrentTopologyState(false) // 进行当前状态的更新 -> false
+                setCurrentTopologyState(true);
+                setTopologyNeedsCleanup(true);
+                refreshTopologyState() // 进行当前状态的更新 -> false
                 setPromptBoxLoading(false) // 关闭 promptbox 的 loading 状态
                 setPromptBoxOpen(false) // 关闭 promptbox
             })
@@ -915,9 +919,12 @@ export function TopologyOnly(props) {
                 window.location.reload() // 进行页面的强制刷新
             }, (error) => {
                 message.error({
-                    content: `stop topology error ${error}`
+                    content: error.response?.data?.message || `stop topology error ${error}`
                 })
                 // 不进行状态的更新
+                setTopologyNeedsCleanup(true);
+                setTxRateTestStatus(false);
+                refreshTopologyState();
                 setPromptBoxLoading(false)
                 setPromptBoxOpen(false)
             })
@@ -1098,13 +1105,21 @@ export function TopologyOnly(props) {
     }
 
     // 18.3 节点添加的逻辑
-    const AddNodeLogic = (nodeType, x, y, currentState) => {
+    const AddNodeLogic = (nodeType, x, y, currentState, savedIndex) => {
+        if (!graph || graph.destroyed) return;
+        const usedIndexes = graph.getNodes().map(node => node.getID())
+            .filter(id => id.startsWith(nodeType + "_"))
+            .map(id => Number(id.slice(nodeType.length + 1)));
+        const nodeIndex = savedIndex ?? (Math.max(0, ...usedIndexes) + 1);
+        if (!Number.isInteger(nodeIndex) || nodeIndex < 1 || usedIndexes.includes(nodeIndex)) {
+            throw new Error("拓扑节点编号必须为不重复的正整数");
+        }
         let successfullyAdd = false
         let fontsize = 20
         let figuresize = 60
         if (nodeType === "Router") { // 进行路由节点的添加
             setRouters(prevRouters => {
-                let routerId = nodeType + "_" + (prevRouters.length + 1)
+                let routerId = nodeType + "_" + nodeIndex
                 let router = {
                     id: routerId,
                     label: routerId,
@@ -1131,7 +1146,7 @@ export function TopologyOnly(props) {
             successfullyAdd = true
         } else if (nodeType === "NormalNode") { // 进行普通节点的添加
             setNormalNodes(prevNormalNodes => {
-                let normalNodeId = nodeType + "_" + (prevNormalNodes.length + 1)
+                let normalNodeId = nodeType + "_" + nodeIndex
                 let normalNode = {
                     id: normalNodeId,
                     label: normalNodeId,
@@ -1157,7 +1172,7 @@ export function TopologyOnly(props) {
             successfullyAdd = true
         } else if (nodeType === "ConsensusNode") { // 进行共识节点的添加
             setConsensusNodes(prevConsensusNodes => {
-                let consensusNodeId = nodeType + "_" + (prevConsensusNodes.length + 1)
+                let consensusNodeId = nodeType + "_" + nodeIndex
                 let consensusNode = {
                     id: consensusNodeId,
                     label: consensusNodeId,
@@ -1183,7 +1198,7 @@ export function TopologyOnly(props) {
             successfullyAdd = true
         } else if (nodeType === "ChainMakerNode") { // 进行长安链节点的添加
             setChainMakerNodes(prevChainMakerNodes => {
-                let chainMakerNodeId = nodeType + "_" + (prevChainMakerNodes.length + 1)
+                let chainMakerNodeId = nodeType + "_" + nodeIndex
                 let chainMakerNode = {
                     id: chainMakerNodeId,
                     label: chainMakerNodeId,
@@ -1209,7 +1224,7 @@ export function TopologyOnly(props) {
             successfullyAdd = true
         } else if (nodeType === "MaliciousNode") { // 进行恶意节点的添加
             setMaliciousNodes(prevMaliciousNodes => {
-                let maliciousNodeId = nodeType + "_" + (prevMaliciousNodes.length + 1)
+                let maliciousNodeId = nodeType + "_" + nodeIndex
                 let maliciousNode = {
                     id: maliciousNodeId,
                     label: maliciousNodeId,
@@ -1235,7 +1250,7 @@ export function TopologyOnly(props) {
             successfullyAdd = true
         } else if (nodeType === "LirNode") { // 进行 lir 节点的添加
             setLirNodes(prevLirNodes => {
-                let lirNodeId = nodeType + "_" + (prevLirNodes.length + 1)
+                let lirNodeId = nodeType + "_" + nodeIndex
                 let lirNode = {
                     id: lirNodeId,
                     label: lirNodeId,
@@ -1261,7 +1276,7 @@ export function TopologyOnly(props) {
             successfullyAdd = true
         } else if (nodeType === "FabricPeerNode") {
             setFabricPeerNodes(prevFabricPeerNodes => {
-                let fabricPeerNodeId = nodeType + "_" + (prevFabricPeerNodes.length + 1)
+                let fabricPeerNodeId = nodeType + "_" + nodeIndex
                 let fabricPeerNode = {
                     id: fabricPeerNodeId,
                     label: fabricPeerNodeId,
@@ -1287,7 +1302,7 @@ export function TopologyOnly(props) {
             successfullyAdd = true
         } else if (nodeType === "FabricOrderNode") {
             setFabricOrderNodes(prevFabricOrderNodes => {
-                let fabricOrderNodeId = nodeType + "_" + (prevFabricOrderNodes.length + 1)
+                let fabricOrderNodeId = nodeType + "_" + nodeIndex
                 let fabricOrderNode = {
                     id: fabricOrderNodeId,
                     label: fabricOrderNodeId,
@@ -1313,7 +1328,7 @@ export function TopologyOnly(props) {
             successfullyAdd = true
         } else if (nodeType === "FiscoBcosNode") {
             setFiscoBcosNodes(prevFiscoBcosNodes => {
-                let fiscoBcosNodeId = nodeType + "_" + (prevFiscoBcosNodes.length + 1)
+                let fiscoBcosNodeId = nodeType + "_" + nodeIndex
                 let fiscoBcosNode = {
                     id: fiscoBcosNodeId,
                     label: fiscoBcosNodeId,
@@ -1418,7 +1433,7 @@ export function TopologyOnly(props) {
         const currentNetworkTopology = values[networkTopologyField[0]] || selectedNetworkTopology;
         const currentBlockchain = values[blockchainTypeField[0]] || selectedBlockchain;
         const currentConsensusType = values[consensusTypeField[0]] || selectedConsensusType;
-        const currentAccessLinkBandwidth = values[accessLinkBandwidthField[0]] || selectedAccessLinkBandwidth;
+        const currentAccessLinkBandwidth = "由后端配置控制（此页面不覆盖）";
         const currentConsensusNodeCpuLimit = values[consensusNodeCpuField[0]] || selectedConsensusNodeCpuLimit;
         const currentConsensusNodeMemoryLimit = values[consensusNodeMemoryField[0]] || selectedConsensusNodeMemoryLimit;
         const currentConsensusThreadCount = values[consensusThreadCountField[0]] || selectedConsensusThreadCount;
@@ -1669,9 +1684,6 @@ export function TopologyOnly(props) {
     function stopTxRateTestClicked() {
         stopTxRateTest((response) => {
             // 进行计时器的停止
-            if (txRateTimer) {
-                clearInterval(txRateTimer)
-            }
             // 成功停止共识
             message.success({
                 content: "成功停止共识"
@@ -1737,56 +1749,30 @@ export function TopologyOnly(props) {
     const [timeoutList, setTimeoutList] = useState([1, 2, 3])
     const [messageCountList, setMessageCountList] = useState([1, 2, 3])
 
-    let captureTimer = undefined
-
-    let captureTpsRateTimer = undefined
-
-    // 3. 上来就加载一个默认的界面
+    // Polling belongs to the mounted page, never to a render-local timer ID.
     useEffect(() => {
-        // 3.1 为相应的容器开启第一个 webshell
-        // AddWebShellLogic()
+        if (!currentTopologyState || topologyNeedsCleanup) return;
+        let cancelled = false;
+        let timer;
+        const poll = () => GetTxRateTest(response => {
+            if (cancelled) return;
+            setTimeList(response.data.time_list);
+            setCurrentTps(response.data.rate_list);
+            timer = setTimeout(poll, 2000);
+        }, () => {
+            if (!cancelled) timer = setTimeout(poll, 2000);
+        });
+        poll();
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [currentTopologyState, topologyNeedsCleanup]);
 
-        // 3.2 开启性能捕获线程
-        captureTimer = setInterval(() => {
-            StartCapture()
-        }, 2000)
-
-        // 3.3  开启tps rate 捕获线程
-        captureTpsRateTimer = setInterval(()=>{
-            StartGetTps()
-        }, 2000)
-
-        // 3.3 添加在页面被释放之前的卸载
-        window.addEventListener('beforeunload', () => {
-            // StopCapture()
-        })
-
-        // 3.4 当界面析构时候的逻辑
-        return () => {
-            window.removeEventListener('beforeunload', () => {
-                // StopCapture()
-            })
-            clearInterval(captureTimer)
-            clearInterval(captureTpsRateTimer)
-        }
-    }, [])
-
-    // 3. 开启获取 tps
-    function StartGetTps(){
-        GetTxRateTest((response)=>{
-            setTimeList(response.data["time_list"])
-            setCurrentTps(response.data["rate_list"])
-        },(error)=>{
-            console.log("error response")
-        })
-    }
-
-    // 4. 开启抓包
-    function StartCapture() {
+    function StartCapture(isCancelled = () => false, onComplete = () => {}) {
         let params = {
             container_name: selectedConsensusNode.replace("_", "-")
         }
         startCaptureInterfaceRate(params, (response) => {
+            if (isCancelled()) return;
+            onComplete();
             console.log(response)
             setTimeListNew(response.data["time_list"])
             setInterfaceRateList(response.data["interface_rate_list"])
@@ -1810,7 +1796,7 @@ export function TopologyOnly(props) {
             }
         }, (error) => {
             console.log("error response in start capture")
-            clearInterval(captureTimer)
+            if (!isCancelled()) onComplete()
         })
     }
 
@@ -1824,26 +1810,15 @@ export function TopologyOnly(props) {
 
     // 5.1 监测 selectedConsensusNode 变化，重新启动抓包
     useEffect(() => {
-        if (currentTopologyState && selectedConsensusNode) {
-            // 停止之前的抓包
-            // StopCapture()
-            // 清除之前的定时器
-            if (captureTimer) {
-                clearInterval(captureTimer)
-            }
-            // 重新启动抓包
-            captureTimer = setInterval(() => {
-                StartCapture()
-            }, 2000)
-        }
-
-        // 清理函数
-        return () => {
-            if (captureTimer) {
-                clearInterval(captureTimer)
-            }
-        }
-    }, [selectedConsensusNode, currentTopologyState])
+        if (!currentTopologyState || topologyNeedsCleanup || !selectedConsensusNode) return;
+        let cancelled = false;
+        let timer;
+        const poll = () => StartCapture(() => cancelled, () => {
+            if (!cancelled) timer = setTimeout(poll, 2000);
+        });
+        poll();
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [selectedConsensusNode, currentTopologyState, topologyNeedsCleanup]);
 
     // 6. 添加webshell的逻辑
     function AddWebShellLogic() {
@@ -2353,6 +2328,7 @@ export function TopologyOnly(props) {
     return (
         <div className="topology-container-topology-only"
              style={{position: "relative", height: "100vh", overflow: "auto"}}>
+            {topologyNeedsCleanup && <Alert type="warning" showIcon message="拓扑清理未完成，请点击停止拓扑重试；清理完成前不能启动新实验。" />}
             {/*/!*空行*!/*/}
             {/*<Row style={{height: "20vh", marginLeft: "1vw", marginRight: "1vw"}}>*/}
 
@@ -2616,23 +2592,7 @@ export function TopologyOnly(props) {
                                     <Row>
                                         <Col span={2}></Col>
                                         <Col span={10}>
-                                            <Form.Item
-                                                label={accessLinkBandwidthField[1]}
-                                                name={accessLinkBandwidthField[0]}
-                                                rules={[
-                                                    {
-                                                        required: true,
-                                                        message: "请选择接入链路带宽"
-                                                    }
-                                                ]}
-                                            >
-                                                <InputNumber
-                                                    disabled={currentTopologyState}
-                                                    placeholder={`${selectedAccessLinkBandwidth}`}
-                                                    min={0} style={{width: "100%"}}
-                                                    changeOnWheel>
-                                                </InputNumber>
-                                            </Form.Item>
+                                            <Form.Item label={accessLinkBandwidthField[1]}><Input value="由后端配置控制" disabled /></Form.Item>
                                         </Col>
                                         <Col span={10}>
                                             <Form.Item
@@ -2746,7 +2706,7 @@ export function TopologyOnly(props) {
                                             <Button
                                                 type={"primary"}
                                                 style={{width: "100%", backgroundColor: '#6495ED'}}
-                                                disabled={!currentTopologyState}
+                                                disabled={!currentTopologyState || topologyNeedsCleanup}
                                                 onClick={installChannelAndChaincodeClicked}
                                             >
                                                 安装链码
@@ -2926,7 +2886,7 @@ export function TopologyOnly(props) {
                                                     type={"primary"}
                                                     style={{width: "100%"}}
                                                     onClick={startTxRateTestClicked}
-                                                    disabled={txRateTestStatus}
+                                                    disabled={txRateTestStatus || !currentTopologyState || topologyNeedsCleanup}
                                                 >
                                                     开始
                                                 </Button>
@@ -2976,7 +2936,7 @@ export function TopologyOnly(props) {
                                         <Row>
                                             <Col span={2}></Col>
                                             <Col span={20}>
-                                                <Switch value={startDefence} onChange={onStartDefenceChange}
+                                                <Switch value={startDefence} disabled={topologyNeedsCleanup} onChange={onStartDefenceChange}
                                                         style={{width: "100%", marginTop: "10px"}}/>
                                             </Col>
                                             <Col span={2}></Col>

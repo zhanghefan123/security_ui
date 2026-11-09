@@ -1,8 +1,9 @@
 import axios from "axios";
 import {topologyServerAddr, topologyServerPort, UrlBase} from "./base"
 
-const startTopologyUrl = "startTopology"
+const startTopologyUrl = "startTopologySimple"
 const stopTopologyUrl = "stopTopology"
+const getStopProgressUrl = "getStopProgress"
 const getTopologyStateUrl = "getTopologyState"
 const getWideAreaNetworkTopologyUrl = "/topologies/wide_area_network_topology.txt"
 const getDataCenterTopologyUrl = "/topologies/multicast_path_validation_topology.txt"
@@ -63,6 +64,15 @@ export const startTopology = (params, response_callback, error_callback) => {
 // stopTopology 停止的时候的函数
 export const stopTopology = (response_callback, error_callback) => {
     axios.post(`${UrlBase}/${stopTopologyUrl}`).then(response=>{
+        response_callback(response)
+    }, (error)=>{
+        error_callback(error)
+    })
+}
+
+// getStopProgress 获取销毁进度
+export const getStopProgress = (operation, response_callback, error_callback) => {
+    axios.post(`${UrlBase}/${getStopProgressUrl}`, null, {params: {operation}}).then(response=>{
         response_callback(response)
     }, (error)=>{
         error_callback(error)

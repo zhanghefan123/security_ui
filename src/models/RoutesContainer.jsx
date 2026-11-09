@@ -4,8 +4,10 @@ import {Constellation} from "../pages/Constellation";
 import {Instance} from "../pages/Instance";
 import {TestApp} from "../pages/Test";
 import {TopologyOnly} from "../pages/TopologyOnly";
+import {Home} from "../pages/Home";
 
 export const RoutesMapping = new Map([
+    [5, ["系统首页", "/", <Home/>]],
     [0, ["拓扑配置界面", "/topology", <Topology/>]],
     [1, ["星座可视化界面", "/constellation", <Constellation/>]],
     [2, ["命令行", "/instance/:containerName", <Instance/>]],

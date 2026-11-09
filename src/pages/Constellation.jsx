@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from "react";
-import {Button, Card, Col, Divider, Form, message, Modal, Row, Select, Slider, Switch, Table} from "antd";
+import {Button, Card, Form, message, Modal, Progress, Select, Slider, Switch, Table} from "antd";
 import {InputNumber} from "antd/lib";
 import {BoxGraphics, Entity, PointGraphics, PolylineGraphics, Viewer} from "resium";
 import {
@@ -7,14 +7,42 @@ import {
     getAvailableGroundStations,
     getConstellationStateRequest,
     getInstancePositionsRequest,
+    getStopProgressRequest,
     startConstellationRequest,
     stopConstellationRequest
 } from "../requests/constellation";
 import * as Cesium from "cesium";
 import {Cartesian3, ScreenSpaceEventHandler, ScreenSpaceEventType, Transforms} from "cesium";
 import {ProForm} from "@ant-design/pro-components";
+import {GlobalOutlined} from "@ant-design/icons";
+import "./Constellation.css";
 
 // react for cesium 官方参考网址 https://resium.reearth.io/components/PointGraphics
+
+// 星座启动/初始化各步骤的中文名称，用于进度条展示
+const CONSTELLATION_STEP_LABELS = {
+    SetHostReceiveMemory: "设置接收缓存",
+    GenerateSatellites: "生成卫星",
+    GenerateGroundStations: "生成地面站",
+    GenerateSubnets: "生成子网",
+    GenerateISLs: "生成星间链路",
+    GenerateGSLs: "生成星地链路",
+    GenerateFrrConfigurationFiles: "生成 FRR 配置",
+    GenerateAddressMapping: "生成地址映射",
+    GeneratePortMapping: "生成端口映射",
+    CalculateAndWriteSegmentRoutes: "计算段路由",
+    CalculateAndWriteLiRRoutes: "计算 LiR 路由",
+    GenerateIfnameToLinkIdentifierMapping: "生成接口映射",
+    GenerateSatelliteLinks: "生成卫星 veth",
+    StartSatelliteContainers: "启动卫星容器",
+    StartGroundStationContainers: "启动地面站容器",
+    SetVethNameSpaces: "设置 veth 命名空间",
+    StartEtcdService: "启动 Etcd 服务",
+    StoreToEtcd: "写入 Etcd",
+    CreateServiceContext: "创建服务上下文",
+    StartPositionService: "启动位置服务",
+    StartUpdateDelayService: "启动延迟更新服务",
+};
 
 // Constellation 页面
 export function Constellation(props) {
@@ -83,9 +111,20 @@ export function Constellation(props) {
     const [promptBoxLoading, setPromptBoxLoading] = useState(false)
     // ---------------------------------------------------------------------------------------------
 
+    // 4.5 销毁进度
+    // ---------------------------------------------------------------------------------------------
+    const [stopProgressPercent, setStopProgressPercent] = useState(0)
+    const [stopProgressStep, setStopProgressStep] = useState("")
+    const [stopInProgress, setStopInProgress] = useState(false)
+    const stopProgressTimerRef = useRef(null)
+    // ---------------------------------------------------------------------------------------------
+
     // 5. 当前星座的状态 (启动, 未启动)
     // ---------------------------------------------------------------------------------------------
     const [currentConstellationState, setCurrentConstellationState] = useState(false)
+    const [constellationNeedsCleanup, setConstellationNeedsCleanup] = useState(false)
+    const constellationRunningRef = useRef(false);
+    constellationRunningRef.current = currentConstellationState || constellationNeedsCleanup;
     // ---------------------------------------------------------------------------------------------
 
     // 6. 所有实例的实时位置信息
@@ -97,6 +136,8 @@ export function Constellation(props) {
     // 7. 获取实例状态的 timer
     // ---------------------------------------------------------------------------------------------
     const [instanceTimer, setInstanceTimer] = useState(null)
+    useEffect(() => () => { if (instanceTimer) clearInterval(instanceTimer); }, [instanceTimer]);
+    useEffect(() => () => { if (stopProgressTimerRef.current) clearInterval(stopProgressTimerRef.current); }, []);
     // ---------------------------------------------------------------------------------------------
 
     // 8. 控制组件初始化步骤的状态
@@ -117,10 +158,11 @@ export function Constellation(props) {
         GetAvailableGroundStations()
 
         // 注册监听器 -> 这里进行延迟加载 -> 否则无法进行 viewer 的获取
-        RegisterHandler()
+        const unregisterHandler = RegisterHandler()
 
         // 卸载的时候触发的回调
         return () => {
+            unregisterHandler();
             if (instanceTimer) {
                 clearInterval(instanceTimer)
             }
@@ -129,14 +171,24 @@ export function Constellation(props) {
 
     // RegisterHandler 注册处理器
     function RegisterHandler() {
-        setTimeout(()=>{
-            const viewer = viewerRef.current.cesiumElement
-            const handler = new ScreenSpaceEventHandler(viewer.scene.canvas)
+        let timer;
+        let handler;
+        let disposed = false;
+        const register = () => {
+            if (disposed) return;
+            const viewer = viewerRef.current?.cesiumElement;
+            if (!viewer || viewer.isDestroyed()) {
+                timer = setTimeout(register, 50);
+                return;
+            }
+            handler = new ScreenSpaceEventHandler(viewer.scene.canvas)
 
             // 监听点击事件
             handler.setInputAction((movement) => {
+                if (disposed || viewer.isDestroyed() || constellationRunningRef.current) return;
                 let pick = viewer.scene.pick(movement.position)
-                let entity = pick.id
+                let entity = pick?.id
+                if (!entity?.box) return;
                 // 如果是红色的话那么转为绿色
                 if (entity.box) {
                     if (Cesium.Color.equals(entity.box.material.color._value, Cesium.Color.RED)) {
@@ -159,7 +211,7 @@ export function Constellation(props) {
                                 // 已经找到了相应的元素
                                 if (index > -1) {
                                     // 利用这个位置进行删除
-                                    prevSelectedGroundStations.splice(index, 1)
+                                    prevSelectedGroundStations = prevSelectedGroundStations.filter((_, itemIndex) => itemIndex !== index)
                                     // 需要调用 react 自己的方法进行设置
                                     startConstellationForm.setFieldsValue({
                                         "地面站列表": [...prevSelectedGroundStations]
@@ -175,20 +227,28 @@ export function Constellation(props) {
                     }
                 }
             }, ScreenSpaceEventType.RIGHT_CLICK);
-        }, 50)
+        };
+        timer = setTimeout(register, 0);
+        return () => {
+            disposed = true;
+            clearTimeout(timer);
+            if (handler && !handler.isDestroyed()) handler.destroy();
+        };
     }
 
     // 获取星座的状态
     function GetConstellationState() {
         getConstellationStateRequest((response) => {
             if (response.data["state"] === "up") {
+                setConstellationNeedsCleanup(false);
+                if (instanceTimer) clearInterval(instanceTimer);
                 // 进行星座参数的打印
                 console.log(response.data["constellation_params"])
                 // 进行参数的获取
                 let orbitNumber = response.data["constellation_params"]["orbit_number"]
                 let satellitePerOrbit = response.data["constellation_params"]["satellite_per_orbit"]
                 let groundStations = response.data["constellation_params"]["ground_stations"]
-                let minimumElevationAngle = response.data["constellation_params"]["minimum_elecvation_angle"]
+                let minimumElevationAngle = response.data["constellation_params"]["minimum_elevation_angle"]
                 let timeStep = response.data["constellation_params"]["time_step"]
                 startConstellationForm.setFieldsValue({
                     [orbitNumberFieldName[0]]: orbitNumber,
@@ -213,6 +273,15 @@ export function Constellation(props) {
                 setInstanceTimer(timer)
             } else if (response.data["state"] === "down") {
                 setCurrentConstellationState(false)
+                setConstellationNeedsCleanup(false)
+                if (instanceTimer) clearInterval(instanceTimer)
+                setInstanceTimer(null)
+            } else if (response.data["state"] === "failed") {
+                setCurrentConstellationState(true)
+                setConstellationNeedsCleanup(true)
+                if (instanceTimer) clearInterval(instanceTimer)
+                setInstanceTimer(null)
+                message.error({content: response.data.message || "星座清理未完成，请点击销毁星座重试"})
             } else {
                 message.error({
                     content: "unsupported constellation state"
@@ -295,6 +364,13 @@ export function Constellation(props) {
 
     // 11. 获取卫星位置的函数
     // ---------------------------------------------------------------------------------------------
+    function stopProgressPolling() {
+        if (stopProgressTimerRef.current) {
+            clearInterval(stopProgressTimerRef.current)
+            stopProgressTimerRef.current = null
+        }
+    }
+
     function getInstancePositions(displayProjectionOrNot) {
         getInstancePositionsRequest((response) => {
             let entities = []
@@ -406,7 +482,7 @@ export function Constellation(props) {
             for(let linkId in response.data.gsls) {
                 let sourceContainerName = response.data.gsls[linkId][0]
                 let targetContainerName = response.data.gsls[linkId][1]
-                if(targetContainerName === ""){
+                if (!response.data.positions[sourceContainerName] || !response.data.positions[targetContainerName]) {
                     continue
                 }
                 let lineData = [
@@ -441,6 +517,9 @@ export function Constellation(props) {
                 let sourceContainerName = response.data.isls[linkId][0]
                 let targetContainerName = response.data.isls[linkId][1]
                 let linkType = response.data.isls[linkId][2]
+                if (!response.data.positions[sourceContainerName] || !response.data.positions[targetContainerName]) {
+                    continue
+                }
                 let lineData = [
                     response.data.positions[sourceContainerName]["longitude"],
                     response.data.positions[sourceContainerName]["latitude"],
@@ -534,8 +613,17 @@ export function Constellation(props) {
                 [minimumElevationAngleFieldName[1]]: selectedMinimumElevationAngle,
                 [timeStepFieldName[1]]: selectedTimeStep,
             }
+            // 初始化启动进度
+            setStopInProgress(true)
+            setStopProgressPercent(0)
+            setStopProgressStep("正在启动星座...")
             // 进行实际的请求的发送
             startConstellationRequest(params, (response) => {
+                stopProgressPolling()
+                setStopProgressPercent(100)
+                setStopInProgress(false)
+                setConstellationNeedsCleanup(false);
+                if (instanceTimer) clearInterval(instanceTimer);
                 // 说明已经成功启动了星座
                 message.success({
                     content: "successfully start the constellation"
@@ -553,20 +641,49 @@ export function Constellation(props) {
                 // 将其设置到 instanceTimer 之中
                 setInstanceTimer(timer)
             }, (error) => {
-                // 说明启动星座失败
+                stopProgressPolling()
+                setStopInProgress(false)
+                // Re-read state so a failed rollback can be retried with the destroy button.
+                GetConstellationState()
                 message.error({
-                    content: `start constellation error ${error}`
+                    content: error.response?.data?.message || `启动星座失败：${error.message}`
                 })
                 // 去掉对话框的加载状态
                 setPromptBoxLoading(false)
                 // 进行对话框的关闭
                 setPromptBoxOpen(false)
             })
+
+            // 轮询启动进度
+            stopProgressTimerRef.current = setInterval(() => {
+                getStopProgressRequest("constellation", (res) => {
+                    setStopProgressPercent(res.data?.percent ?? 0)
+                    const step = res.data?.step
+                    if (step) setStopProgressStep(CONSTELLATION_STEP_LABELS[step] || step)
+                }, () => {})
+            }, 300)
         } else if (promptBoxType === promptBoxTypes.stopConstellation) { // 处理 stopConstellation
             // 设置对话框的显示
             setPromptBoxLoading(true)
+            // 立即停止位置轮询，避免在销毁期间继续请求 /getInstancePositions。
+            // 后端 stopConstellation 会持有写锁数秒（等待容器清理完成），
+            // 若不提前停掉定时器，期间的轮询会排队并在实例被置空后返回 409。
+            if (instanceTimer) {
+                clearInterval(instanceTimer)
+                setInstanceTimer(null)
+            }
+
+            // 初始化销毁进度
+            setStopInProgress(true)
+            setStopProgressPercent(0)
+            setStopProgressStep("正在销毁星座...")
+
             // 进行实际的请求的发送
             stopConstellationRequest((response) => {
+                // 停止进度轮询
+                stopProgressPolling()
+                setStopProgressPercent(100)
+                setStopInProgress(false)
                 // 停止拓扑成功
                 message.success({
                     content: "successfully stop the constellation"
@@ -575,26 +692,30 @@ export function Constellation(props) {
                 setPromptBoxLoading(false)
                 setPromptBoxOpen(false)
 
-                // 进行周期性计时器的停止
-                if (instanceTimer) {
-                    clearInterval(instanceTimer)
-                }
-
                 // 进行页面的强制刷新
                 window.location.reload()
             }, (error) => {
-                // 停止拓扑失败
+                // 停止进度轮询
+                stopProgressPolling()
+                setStopInProgress(false)
+                // 保留销毁按钮，允许重试未完成的清理。
+                setConstellationNeedsCleanup(true)
+                setInstanceTimer(null)
                 message.error({
-                    content: `stop constellation error ${error}`
+                    content: error.response?.data?.message || `销毁星座失败：${error.message}`
                 })
                 setPromptBoxLoading(false)
                 setPromptBoxOpen(false)
-
-                // 进行周期性计时器的停止
-                if (instanceTimer) {
-                    clearInterval(instanceTimer)
-                }
             })
+
+            // 轮询销毁进度
+            stopProgressTimerRef.current = setInterval(() => {
+                getStopProgressRequest("constellation", (res) => {
+                    setStopProgressPercent(res.data?.percent ?? 0)
+                    const step = res.data?.step
+                    if (step) setStopProgressStep(CONSTELLATION_STEP_LABELS[step] || step)
+                }, () => {})
+            }, 300)
         } else {
             console.error("unsupported prompt box type")
         }
@@ -703,7 +824,7 @@ export function Constellation(props) {
             // 进行 state 的设置
             setSelectedTimestep(changedTimeStamp)
             // 当星座启动之后才可以通过这种方式进行调整
-            if (currentConstellationState){
+            if (currentConstellationState && !constellationNeedsCleanup){
                 // 进行请求的发送
                 changeTimeStep(changedTimeStamp)
             }
@@ -757,248 +878,98 @@ export function Constellation(props) {
     // 17. 真实的前端界面
     // ---------------------------------------------------------------------------------------------
     return (
-        <div>
-            {/*第1行*/}
-            <Row style={{height: "10px"}}>
-
-            </Row>
-            <Row>
-                <Divider
-                    style={{
-                        borderColor: '#7cb305',
-                    }}
-                >
-                    {firstSplitContent}
-                </Divider>
-            </Row>
-            {/*第3行*/}
-            <Form
-                form={startConstellationForm}
-                name={nameOfForm}
-                onFinishFailed={onValidateStartConstellationFailed}
-                onFinish={onStartConstellationFinish}
-                onValuesChange={onStartConstellationValuesChange}
-                labelCol={{
-                    span: 6,
-                }}
-                wrapperCol={{
-                    span: 18,
-                }}
-                initialValues={{
-                    [orbitNumberFieldName[0]]: orbitNumber,
-                    [satellitePerOrbitFieldName[0]]: satellitePerOrbit,
-                    [groundStationsFieldName[0]]: selectedGroundStations,
-                    [minimumElevationAngleFieldName[0]]: selectedMinimumElevationAngle,
-                    [timeStepFieldName[0]]: selectedTimeStep,
-                }}
-            >
-                <Row>
-                    <Col span={2}>
-
-                    </Col>
-                    <Col span={14}>
-                        <Row justify={"center"}>
-                            {/*<Col span={6}></Col>*/}
-                            <Col span={2}></Col>
-                            <Col span={11} style={{textAlign: "center"}}>
-                                <Form.Item
-                                    label={orbitNumberFieldName[0]}
-                                    name={orbitNumberFieldName[0]}
-                                    rules={[
-                                        {
-                                            required: true,
-                                            message: "请选择轨道数量"
-                                        }
-                                    ]}
-                                >
-                                    <InputNumber disabled={currentConstellationState} style={{width: "100%"}} changeOnWheel></InputNumber>
-                                </Form.Item>
-                            </Col>
-                            <Col span={11} style={{textAlign: "center"}}>
-                                <Form.Item
-                                    label={satellitePerOrbitFieldName[0]} // 在表单前面的内容
-                                    name={satellitePerOrbitFieldName[0]}
-                                    rules={[
-                                        {
-                                            required: true,
-                                            message: "请选择每个轨道的卫星数量"
-                                        }
-                                    ]}
-                                >
-                                    <InputNumber disabled={currentConstellationState} style={{width: "100%"}} changeOnWheel></InputNumber>
-                                </Form.Item>
-                            </Col>
-
-                            {/*<Col span={2}>*/}
-
-                            {/*</Col>*/}
-                        </Row>
-                        <Row justify={"center"}>
-                            <Col span={2}>
-
-                            </Col>
-                            <Col span={22}>
-                                <Form.Item
-                                    label={groundStationsFieldName[0]}
-                                    name={groundStationsFieldName[0]}
-                                    labelCol={{
-                                        span: 3,
-                                    }}
-                                    wrapperCol={{
-                                        span: 21,
-                                    }}
-                                >
-                                    <Select
-                                        mode="multiple"
-                                        allowClear={true}
-                                        style={{width: '100%'}}
-                                        disabled={currentConstellationState}
-                                        options={availableGroundStations.map((availableGroundStation) => ({
-                                            label: availableGroundStation.name,
-                                            value: availableGroundStation.name,
-                                        }))}
-                                    >
-                                    </Select>
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                    </Col>
-                    <Col span={4}>
-                        <Row justify={"center"} style={{width: "100%", height: "50%"}}>
-                            <Col span={24} style={{textAlign: "center"}}>
-                                <Button type={"primary"} htmlType={"submit"} disabled={currentConstellationState}
-                                        style={{width: "80%"}}>
-                                    启动星座
-                                </Button>
-                            </Col>
-                        </Row>
-                        <Row>
-                            <Col span={24} style={{textAlign: "center", height: "50%"}}>
-                                <Button type={"primary"} danger style={{width: "80%"}}
-                                        disabled={!currentConstellationState} onClick={stopConstellation}>
-                                    销毁星座
-                                </Button>
-                            </Col>
-                        </Row>
-                    </Col>
-                    <Col span={2}>
-
-                    </Col>
-                </Row>
-                <Row style={{marginBottom: "-25px"}}>
-                    <Col span={2}></Col>
-                    <Col span={14}>
-                        <Row>
-                            <Col span={2}></Col>
-                            <Col span={11}>
-                                <Form.Item
-                                    label={minimumElevationAngleFieldName[0]}
-                                    name={minimumElevationAngleFieldName[0]}
-                                    labelCol={{
-                                        span: 6
-                                    }}
-                                    wrapperCol={{
-                                        span: 18
-                                    }}
-                                >
-                                    <InputNumber min={5} max={40} style={{width: "80%"}} value={selectedMinimumElevationAngle}/>
-                                </Form.Item>
-                            </Col>
-                            <Col span={6}>
-                                <Form.Item
-                                    label={timeStepFieldName[0]}
-                                    name={timeStepFieldName[0]}
-                                    labelCol={{
-                                        span: 3,
-                                    }}
-                                    wrapperCol={{
-                                        span: 21,
-                                    }}
-                                >
-                                    <Slider
-                                        min={1}
-                                        max={20}
-                                        value={typeof selectedTimeStep === 'number' ? selectedTimeStep : 0}
-                                    />
-                                </Form.Item>
-                            </Col>
-                            <Col span={5}>
-                                <Row justify={"center"} style={{width: "100%", height: "50%"}}>
-                                    <Form.Item
-                                        label={displayProjectionFieldName[0]}
-                                        name={displayProjectionFieldName[0]}
-                                        labelCol={{
-                                            span: 16,
-                                        }}
-                                        wrapperCol={{
-                                            span: 8,
-                                        }}
-                                    >
-                                        <Switch value={displayProjection} onChange={(value)=>{setDisplayProjection(value)}} >
-                                        </Switch>
-                                    </Form.Item>
-                                </Row>
-                            </Col>
-
-                        </Row>
-                    </Col>
-                    <Col span={4}>
-                        <Row justify={"center"} style={{width: "100%", height: "50%"}}>
-                            <InputNumber
-                                min={1}
-                                max={20}
-                                style={{width: "80%"}}
-                                value={selectedTimeStep}
-                                onChange={(value)=>{
-                                    setSelectedTimestep(value)
-                                    startConstellationForm.setFieldsValue({
-                                        "步长": value
-                                    })
-                                }}
-                            >
-                            </InputNumber>
-                        </Row>
-                    </Col>
-                    <Col span={2}>
-
-                    </Col>
-                </Row>
-            </Form>
-            <Row>
-                <Divider
-                    style={{
-                        borderColor: '#7cb305',
-                    }}
-                >
-                    {secondSplitContent}
-                </Divider>
-            </Row>
-            <Card>
-                <Row span={24}>
-                    <Viewer ref={viewerRef} style={{height: "57vh", width: "100%"}} timeline={false}
-                            homeButton={false} geocoder={false} animation={false} navigationHelpButton={false}
-                            fullscreenButton={false}>
-                        {allInstancePositions}
-                        {allLinks}
-                    </Viewer>
-                </Row>
-            </Card>
-
-
-            {/*提示框*/}
-            {/*---------------------------------------------------------------------------------------------*/}
-            <Modal
-                title={promptBoxTitle}
-                open={promptBoxOpen} // 是否进行开启
-                onOk={handlePromptOkCicked}
-                onCancel={handlePromptCancelClicked}
-                okText={promptBoxOkText}
-                cancelText={promptBoxCancelText}
-                confirmLoading={promptBoxLoading}
-            >
-                {promptBoxText}
-            </Modal>
-            {/*---------------------------------------------------------------------------------------------*/}
+        <div className="constellation-workbench">
+          <header className="constellation-header">
+            <div className="constellation-brand">
+              <div className="constellation-brand-icon"><GlobalOutlined /></div>
+              <div><div className="constellation-eyebrow">CONSTELLATION / SIMULATION CENTER</div><h1>链路感知的安全可控路由原型系统</h1></div>
+            </div>
+            <div className={"constellation-status" + (currentConstellationState && !constellationNeedsCleanup ? " is-active" : "")}><span />{constellationNeedsCleanup ? "星座待清理" : currentConstellationState ? "星座运行中" : "星座未启动"}</div>
+          </header>
+          <main className="constellation-workspace">
+            <aside className="constellation-sidebar" aria-label="星座配置与运行控制">
+              <Form form={startConstellationForm} name={nameOfForm} onFinishFailed={onValidateStartConstellationFailed} onFinish={onStartConstellationFinish} onValuesChange={onStartConstellationValuesChange} initialValues={{
+                [orbitNumberFieldName[0]]: orbitNumber,
+                [satellitePerOrbitFieldName[0]]: satellitePerOrbit,
+                [groundStationsFieldName[0]]: selectedGroundStations,
+                [minimumElevationAngleFieldName[0]]: selectedMinimumElevationAngle,
+                [timeStepFieldName[0]]: selectedTimeStep
+              }} layout="vertical" className="constellation-settings">
+                <Card className="constellation-panel" title={<span><span className="constellation-section-number">01</span>{firstSplitContent}</span>} extra={<span className="constellation-caption">星座参数</span>}>
+                  <div className="constellation-field-grid"><Form.Item label={orbitNumberFieldName[0]} name={orbitNumberFieldName[0]} rules={[{
+                      required: true,
+                      message: "请选择轨道数量"
+                    }]}>
+                      <InputNumber min={1} precision={0} disabled={currentConstellationState} changeOnWheel></InputNumber>
+                    </Form.Item><Form.Item label={satellitePerOrbitFieldName[0]} name={satellitePerOrbitFieldName[0]} rules={[{
+                      required: true,
+                      message: "请选择每个轨道的卫星数量"
+                    }]}>
+                      <InputNumber min={1} precision={0} disabled={currentConstellationState} changeOnWheel></InputNumber>
+                    </Form.Item></div>
+                  <Form.Item label={groundStationsFieldName[0]} name={groundStationsFieldName[0]}>
+                    <Select mode="multiple" placeholder="选择地面站" maxTagCount="responsive" allowClear={true} disabled={currentConstellationState} options={availableGroundStations.map(availableGroundStation => ({
+                      label: availableGroundStation.name,
+                      value: availableGroundStation.name
+                    }))} popupClassName="constellation-select-dropdown">
+                    </Select>
+                  </Form.Item>
+                  <p className="constellation-field-note">可从列表选择地面站，也可在地球上右键选取。</p>
+                  <div className="constellation-actions"><Button type={"primary"} htmlType={"submit"} disabled={currentConstellationState}>启动星座</Button>
+                    <Button type={"primary"} danger disabled={!currentConstellationState} onClick={stopConstellation}>销毁星座</Button></div>
+                </Card>
+                <Card className="constellation-panel" title={<span><span className="constellation-section-number">02</span>仿真与显示</span>}>
+                  <div className="constellation-field-grid constellation-display-fields"><Form.Item label={minimumElevationAngleFieldName[0]} name={minimumElevationAngleFieldName[0]}>
+                      <InputNumber min={5} max={40} precision={0} value={selectedMinimumElevationAngle} />
+                    </Form.Item><Form.Item label={displayProjectionFieldName[0]} name={displayProjectionFieldName[0]}>
+                      <Switch value={displayProjection} onChange={value => {
+                        setDisplayProjection(value);
+                      }} checkedChildren="开" unCheckedChildren="关">
+                      </Switch>
+                    </Form.Item></div>
+                  <div className="constellation-step-controls"><Form.Item label={timeStepFieldName[0]} name={timeStepFieldName[0]}>
+                      <Slider min={1} max={20} value={typeof selectedTimeStep === 'number' ? selectedTimeStep : 0} />
+                    </Form.Item><InputNumber min={1} max={20} precision={0} value={selectedTimeStep} onChange={value => {
+                      if (!Number.isInteger(value) || value < 1) return;
+                      onStartConstellationValuesChange({[timeStepFieldName[0]]: value});
+                      startConstellationForm.setFieldsValue({
+                        "步长": value
+                      });
+                    }} aria-label="步长数值" className="constellation-step-value">
+                    </InputNumber></div>
+                  <div className="constellation-step-scale"><span>1 · 精细步长</span><span>20 · 较大步长</span></div>
+                </Card>
+              </Form>
+              <div className="constellation-summary" aria-label="当前配置概览">
+                <div><span>轨道数量</span><strong>{orbitNumber ?? "—"}</strong></div>
+                <div><span>每轨道卫星</span><strong>{satellitePerOrbit ?? "—"}</strong></div>
+                <div><span>已选地面站</span><strong>{selectedGroundStations.length}</strong></div>
+              </div>
+            </aside>
+            <section className="constellation-scene-panel" aria-label="三维星座视图">
+              <div className="constellation-scene-header">
+                <div><h2><GlobalOutlined />{secondSplitContent}</h2><p>卫星位置 · 星间链路 · 地面站</p></div>
+                <span className="constellation-scene-badge">星座仿真</span>
+              </div>
+              <div className="constellation-scene"><Viewer ref={viewerRef} timeline={false} homeButton={false} geocoder={false} animation={false} navigationHelpButton={false} fullscreenButton={false} className="constellation-viewer">
+                  {allInstancePositions}
+                  {allLinks}
+                </Viewer></div>
+              <footer className="constellation-scene-footer">
+                <div className="constellation-legend"><span><i className="satellite" />卫星</span><span><i className="ground-selected" />已选地面站</span><span><i className="ground-available" />未选地面站</span></div>
+                <span>拖拽旋转 · 滚轮缩放 · 右键选择地面站</span>
+              </footer>
+            </section>
+          </main>
+          <Modal title={promptBoxTitle} open={promptBoxOpen} onOk={handlePromptOkCicked} onCancel={handlePromptCancelClicked} okText={promptBoxOkText} cancelText={promptBoxCancelText} confirmLoading={promptBoxLoading} rootClassName="constellation-dialog">
+            {promptBoxText}
+            {stopInProgress && (
+              <div style={{marginTop: 12}}>
+                <Progress percent={stopProgressPercent} status="active" />
+                <div style={{fontSize: 12, color: "#888", marginTop: 4}}>{stopProgressStep}</div>
+              </div>
+            )}
+          </Modal>
         </div>
     )
     // ---------------------------------------------------------------------------------------------

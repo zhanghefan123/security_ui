@@ -1,0 +1,162 @@
+@import "./WorkbenchTokens.css";
+
+/* Local workbench styling; no global overrides for the other routes. */
+.constellation-workbench {
+    --constellation-bg: #0b1220;
+    --constellation-panel: #111d2e;
+    --constellation-input: #0c1727;
+    --constellation-border: #24354a;
+    --constellation-text: #e6edf7;
+    --constellation-muted: #8da2bb;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    padding: 0 24px 24px;
+    gap: var(--ui-gap);
+    box-sizing: border-box;
+    overflow: auto;
+    color: var(--constellation-text);
+    background: var(--constellation-bg);
+    font-family: "Inter", "Microsoft YaHei", "PingFang SC", sans-serif;
+    color-scheme: dark;
+}
+
+.constellation-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    flex: 0 0 auto;
+    min-height: 96px;
+    padding: 18px 0;
+    gap: var(--ui-gap);
+    border-bottom: 1px solid var(--constellation-border);
+}
+.constellation-brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.constellation-brand > div:last-child { min-width: 0; overflow-wrap: anywhere; }
+.constellation-brand-icon { display: grid; place-items: center; flex: 0 0 46px; height: 46px; border: 1px solid #2a526a; border-radius: 12px; background: #122d3e; color: #6cdef0; font-size: 25px; }
+.constellation-eyebrow { margin-bottom: 6px; font-size: var(--ui-caption); font-weight: 600; letter-spacing: 0.18em; color: var(--constellation-muted); }
+.constellation-header h1 { margin: 0; color: var(--constellation-text); font-size: var(--ui-title); font-weight: 600; line-height: 1.4; letter-spacing: 0.025em; }
+.constellation-status { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 8px 12px; border: 1px solid var(--constellation-border); border-radius: 6px; background: #111d2c; color: #a8b7ca; font-size: var(--ui-body); }
+.constellation-status > span { width: 6px; height: 6px; border-radius: 50%; background: #7c91aa; }
+.constellation-status.is-active { color: #7ae4ba; border-color: #245847; }
+.constellation-status.is-active > span { background: #55dba6; box-shadow: 0 0 8px #55dba640; }
+
+.constellation-workspace { display: grid; grid-template-columns: clamp(22rem, 27vw, 32rem) minmax(0, 1fr); flex: 1 0 auto; min-height: 0; gap: var(--ui-gap); }
+.constellation-sidebar { display: flex; flex-direction: column; min-width: 0; gap: var(--ui-gap); }
+.constellation-workbench .constellation-settings { display: flex; flex-direction: column; gap: var(--ui-gap); }
+.constellation-workbench .constellation-panel.ant-card { min-width: 0; flex-shrink: 0; border: 1px solid var(--constellation-border) !important; border-radius: 10px; background: var(--constellation-panel) !important; overflow: hidden; }
+.constellation-workbench .constellation-panel > .ant-card-head { min-height: 3.5rem; padding: 0 var(--ui-padding); border-bottom: 1px solid var(--constellation-border) !important; background: transparent !important; }
+.constellation-workbench .constellation-panel .ant-card-head-title { padding: 12px 0; color: var(--constellation-text) !important; font-size: var(--ui-heading); font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
+.constellation-workbench .constellation-panel .ant-card-head-wrapper { flex-wrap: wrap; gap: 0 12px; }
+.constellation-workbench .constellation-panel > .ant-card-body { padding: var(--ui-padding); }
+.constellation-section-number { display: inline-block; margin-right: 9px; color: #5e92b4; font-size: var(--ui-caption); font-weight: 500; font-variant-numeric: tabular-nums; }
+.constellation-caption { color: var(--constellation-muted); font-size: var(--ui-caption); }
+.constellation-field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); align-items: end; gap: 0 var(--ui-gap); }
+.constellation-workbench .constellation-settings .ant-form-item { min-width: 0; margin-bottom: var(--ui-gap); }
+.constellation-workbench .constellation-settings .ant-form-item-label { padding-bottom: 8px; white-space: normal; }
+.constellation-workbench .constellation-settings .ant-form-item-label > label { height: auto; max-width: 100%; overflow-wrap: anywhere; color: #a8b8cd !important; font-size: var(--ui-body); line-height: 1.6; }
+.constellation-workbench .constellation-settings .ant-form-item-required::before { color: #61859e !important; font-size: var(--ui-caption) !important; }
+.constellation-workbench .constellation-settings .ant-form-item-control-input { min-height: var(--ui-control); }
+.constellation-workbench .constellation-settings .ant-form-item-explain-error { padding-top: 3px; font-size: var(--ui-caption); }
+.constellation-field-note { margin: -5px 0 20px; color: var(--constellation-muted); font-size: var(--ui-caption); line-height: 1.9; }
+.constellation-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr)); gap: 10px; padding-top: var(--ui-gap); border-top: 1px solid var(--constellation-border); }
+.constellation-step-controls { display: grid; grid-template-columns: minmax(0, 1fr) 5.5rem; align-items: end; gap: var(--ui-gap); padding-top: var(--ui-gap); border-top: 1px solid var(--constellation-border); }
+.constellation-workbench .constellation-step-controls .ant-form-item { margin: 0; }
+.constellation-workbench .constellation-step-controls .ant-slider { margin: 10px 6px; }
+.constellation-step-scale { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; margin: 10px 0 0; color: #8da2bb; font-size: var(--ui-caption); }
+.constellation-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 16px 12px; border: 1px solid var(--constellation-border); border-radius: 10px; background: #0f1b2c; }
+.constellation-summary > div { display: flex; flex-direction: column; gap: 10px; padding: 0 6px; }
+.constellation-summary > div + div { border-left: 1px solid var(--constellation-border); padding-left: 12px; }
+.constellation-summary span { color: var(--constellation-muted); font-size: var(--ui-caption); overflow-wrap: anywhere; }
+.constellation-summary strong { color: #c9e5f2; font-size: clamp(1.5rem, 1.2rem + 0.6vw, 2rem); font-weight: 500; line-height: 1.2; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+.constellation-workbench .ant-input-number { width: 100%; }
+.constellation-workbench .ant-input-number,
+.constellation-workbench .ant-select .ant-select-selector,
+.constellation-dialog .ant-input { border-color: #2b3d54 !important; border-radius: 6px !important; background: var(--constellation-input, #0c1727) !important; color: #e6edf7 !important; font-size: var(--ui-body); }
+.constellation-workbench .ant-input-number-input { height: calc(var(--ui-control) - 2px); }
+.constellation-workbench .ant-input-number-input { font-size: var(--ui-body); font-variant-numeric: tabular-nums; }
+.constellation-workbench .ant-select { width: 100%; min-height: var(--ui-control); background: transparent !important; font-size: var(--ui-body); }
+.constellation-workbench .ant-select .ant-select-selector { min-height: var(--ui-control); padding-block: 3px; }
+.constellation-workbench .ant-select-selection-overflow { gap: 4px 0; }
+.constellation-workbench .ant-select-selection-item { max-width: 100%; color: #d4e4f5 !important; background: #1c3349; font-size: var(--ui-body); }
+.constellation-workbench .ant-select-multiple .ant-select-selection-item { height: auto; padding-block: 2px; line-height: 1.6; }
+.constellation-workbench .ant-select-arrow { color: #7993af; }
+.constellation-workbench .ant-select-focused .ant-select-selector,
+.constellation-workbench .ant-input-number-focused { border-color: #55c8e8 !important; box-shadow: 0 0 0 2px #55c8e812 !important; }
+.constellation-workbench .ant-input-number-disabled,
+.constellation-workbench .ant-select-disabled .ant-select-selector { color: #62768d !important; background: #101a29 !important; border-color: #223044 !important; }
+.constellation-workbench .ant-select-disabled .ant-select-selection-item { color: #62768d !important; }
+.constellation-workbench .ant-btn,
+.constellation-dialog .ant-btn { height: auto; min-height: var(--ui-control); padding: 8px 14px; border-color: #30445c !important; border-radius: 6px; background: #18283c !important; color: #c7d6e8 !important; box-shadow: none; font-size: var(--ui-body); font-weight: 500; white-space: normal; line-height: 1.4; }
+.constellation-workbench .ant-btn-primary,
+.constellation-dialog .ant-btn-primary { background: #247da0 !important; border-color: #318eae !important; color: #f4fbff !important; }
+.constellation-workbench .ant-btn-primary:hover:not(:disabled),
+.constellation-dialog .ant-btn-primary:hover:not(:disabled) { background: #2b91b5 !important; border-color: #61bdd9 !important; }
+.constellation-workbench .ant-btn-dangerous { background: #30202b !important; color: #eb99a7 !important; border-color: #613c4d !important; }
+.constellation-workbench .ant-btn-dangerous:hover:not(:disabled) { background: #482636 !important; color: #ffc0cb !important; border-color: #aa5b74 !important; }
+.constellation-workbench .ant-btn:disabled { color: #62768d !important; background: #101a29 !important; border-color: #223044 !important; }
+.constellation-workbench .ant-btn:focus-visible,
+.constellation-workbench .ant-switch:focus-visible { outline: 2px solid #7fe2f5; outline-offset: 3px; }
+.constellation-workbench .ant-switch { min-width: 48px; background: #32445b !important; }
+.constellation-workbench .ant-switch-checked { background: #247da0 !important; }
+.constellation-workbench .ant-slider-rail { background: #293f57 !important; }
+.constellation-workbench .ant-slider-track { background: #55b6d5 !important; }
+.constellation-workbench .ant-slider-handle::after { background: #e0f4ff; box-shadow: 0 0 0 2px #55b6d5; }
+.constellation-select-dropdown.ant-select-dropdown { border: 1px solid #2b3d54; border-radius: 8px; background: #132236 !important; }
+.constellation-select-dropdown .ant-select-item { font-size: var(--ui-body); color: #d4e4f5 !important; }
+.constellation-select-dropdown .ant-select-item-option-active { background: #1d364d !important; }
+.constellation-select-dropdown .ant-select-item-option-selected { background: #23516b !important; }
+
+.constellation-scene-panel { display: flex; flex-direction: column; min-height: 30rem; min-width: 0; border: 1px solid var(--constellation-border); border-radius: 10px; overflow: hidden; background: #060b14; }
+.constellation-scene-header { display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ui-gap); padding: var(--ui-padding); border-bottom: 1px solid var(--constellation-border); background: var(--constellation-panel); }
+.constellation-scene-header h2 { display: flex; align-items: center; gap: 9px; margin: 0; color: var(--constellation-text); font-size: var(--ui-heading); font-weight: 600; }
+.constellation-scene-header h2 .anticon { color: #60c5e1; }
+.constellation-scene-header p { margin: 5px 0 0; color: var(--constellation-muted); font-size: var(--ui-caption); }
+.constellation-scene-badge { padding: 6px 10px; border: 1px solid #2c4158; border-radius: 6px; color: #9fbdd3; font-size: var(--ui-caption); white-space: nowrap; }
+.constellation-scene { position: relative; flex: 1; min-height: 22rem; }
+.constellation-viewer { position: absolute; inset: 0; width: 100%; height: 100%; }
+.constellation-viewer .cesium-viewer-toolbar { top: 12px; right: 12px; }
+.constellation-viewer .cesium-button { border-color: #344c63; border-radius: 6px; background: #122438e6; color: #c6deef; }
+.constellation-viewer .cesium-button:hover { border-color: #55c8e8; background: #1e405b; }
+.constellation-viewer .cesium-baseLayerPicker-dropDown { max-width: calc(100% - 24px); background: #111d2ef5; border-color: #344c63; }
+.constellation-viewer .cesium-infoBox { max-width: calc(100% - 24px); border-color: #344c63; border-radius: 8px 0 0 8px; background: #111d2e; }
+.constellation-scene-footer { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 14px 18px; border-top: 1px solid var(--constellation-border); background: var(--constellation-panel); color: #8da2bb; font-size: var(--ui-caption); }
+.constellation-legend { display: flex; flex-wrap: wrap; gap: var(--ui-gap); }
+.constellation-legend > span { display: inline-flex; align-items: center; gap: 7px; }
+.constellation-legend i { width: 6px; height: 6px; }
+.constellation-legend .satellite { border-radius: 50%; background: #ffffff; }
+.constellation-legend .ground-selected { background: #008000; }
+.constellation-legend .ground-available { background: #ff0000; }
+.constellation-dialog .ant-modal-content { border: 1px solid #2b3d54; border-radius: 12px; background: #111d2e !important; }
+.constellation-dialog .ant-modal-header { padding-bottom: 16px; border-bottom: 1px solid #24354a; background: transparent !important; }
+.constellation-dialog .ant-modal-title { color: #e6edf7 !important; }
+.constellation-dialog .ant-modal-footer { padding-top: 16px; border-top: 1px solid #24354a; }
+.constellation-dialog .ant-table, .constellation-dialog .ant-table-thead > tr > th { background: #142337 !important; }
+.constellation-dialog .ant-table-tbody > tr > td { border-bottom-color: #24354a; }
+
+@media (max-width: 1100px) {
+    .constellation-workbench { padding: 0 16px 16px; gap: var(--ui-gap); }
+    .constellation-scene-footer { align-items: flex-start; flex-direction: column; }
+}
+@media (max-width: 60rem) {
+    .constellation-workspace { flex: none; grid-template-columns: minmax(0, 1fr); }
+    .constellation-workbench .constellation-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
+    .constellation-scene { min-height: clamp(22rem, 60vh, 44rem); }
+    .constellation-header { min-height: 88px; }
+    .constellation-eyebrow { font-size: var(--ui-caption); letter-spacing: 0.1em; }
+    .constellation-status { padding: 7px 9px; font-size: var(--ui-caption); }
+}
+@media (max-width: 600px) {
+    .constellation-workbench { padding: 0 12px 12px; }
+    .constellation-header { flex-wrap: wrap; gap: 12px; padding: 18px 0; }
+    .constellation-brand { gap: 10px; }
+    .constellation-brand-icon { flex-basis: 36px; height: 36px; font-size: 21px; border-radius: 9px; }
+    .constellation-header h1 { font-size: var(--ui-title); }
+    .constellation-eyebrow { font-size: var(--ui-caption); letter-spacing: 0.04em; }
+    .constellation-status { margin-left: 46px; }
+    .constellation-scene-header { padding: 16px; }
+    .constellation-scene-footer { padding: 12px; font-size: var(--ui-caption); }
+}
