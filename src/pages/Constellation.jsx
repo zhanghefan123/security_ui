@@ -1,7 +1,7 @@
 import React, {useEffect, useRef, useState} from "react";
 import {Button, Card, Form, message, Modal, Progress, Select, Slider, Switch, Table} from "antd";
 import {InputNumber} from "antd/lib";
-import {BoxGraphics, Entity, PointGraphics, PolylineGraphics, Viewer} from "resium";
+import {BoxGraphics, Entity, PointGraphics, Viewer} from "resium";
 import {
     changeTimeStepRequest,
     getAvailableGroundStations,
@@ -15,6 +15,11 @@ import * as Cesium from "cesium";
 import {Cartesian3, ScreenSpaceEventHandler, ScreenSpaceEventType, Transforms} from "cesium";
 import {ProForm} from "@ant-design/pro-components";
 import {GlobalOutlined} from "@ant-design/icons";
+import {ConstellationLabelContext, ConstellationNameLabel} from "./ConstellationLabels";
+import {ConstellationContextMenu} from "./ConstellationContextMenu";
+import {ConstellationOrbitSettings, DEFAULT_ORBIT_CONFIG} from "./ConstellationOrbitSettings";
+import {ConstellationOrbits} from "./ConstellationOrbits";
+import {ConstellationTrafficCard, ConstellationTrafficContext, ConstellationTrafficLink, ConstellationTrafficPanel, useConstellationTraffic} from "./ConstellationTraffic";
 import "./Constellation.css";
 
 // react for cesium 官方参考网址 https://resium.reearth.io/components/PointGraphics
@@ -40,6 +45,7 @@ const CONSTELLATION_STEP_LABELS = {
     StartEtcdService: "启动 Etcd 服务",
     StoreToEtcd: "写入 Etcd",
     CreateServiceContext: "创建服务上下文",
+    InitializeISLVisibility: "初始化星间链路可视性",
     StartPositionService: "启动位置服务",
     StartUpdateDelayService: "启动延迟更新服务",
 };
@@ -88,12 +94,16 @@ export function Constellation(props) {
     // ---------------------------------------------------------------------------------------------
     const [orbitNumber, setOrbitNumber] = useState(1)
     const [satellitePerOrbit, setSatellitePerOrbit] = useState(11)
+    const [orbitConfig, setOrbitConfig] = useState({...DEFAULT_ORBIT_CONFIG});
     const [availableGroundStations, setAvailableGroundStations] = useState([])
     const [availableGroundStationsMapping, setAvailableGroundStationsMapping] = useState({})
     const [selectedGroundStations, setSelectedGroundStations] = useState([])
     const [selectedTimeStep, setSelectedTimestep] = useState(1)
     const [selectedMinimumElevationAngle, setSelectedMinimumElevationAngle] = useState(5)
     const [displayProjection, setDisplayProjection] = useState(false)
+    const [showSatelliteNames, setShowSatelliteNames] = useState(true)
+    const [showGroundStationNames, setShowGroundStationNames] = useState(true)
+    const [showOrbits, setShowOrbits] = useState(true)
     // ---------------------------------------------------------------------------------------------
 
     // 4.提示框的内容
@@ -123,14 +133,29 @@ export function Constellation(props) {
     // ---------------------------------------------------------------------------------------------
     const [currentConstellationState, setCurrentConstellationState] = useState(false)
     const [constellationNeedsCleanup, setConstellationNeedsCleanup] = useState(false)
-    const constellationRunningRef = useRef(false);
-    constellationRunningRef.current = currentConstellationState || constellationNeedsCleanup;
+    const [contextMenu, setContextMenu] = useState(null);
+    const [trafficSource, setTrafficSource] = useState(null);
+    const trafficEnabled = currentConstellationState && !constellationNeedsCleanup && !stopInProgress;
+    const traffic = useConstellationTraffic(trafficEnabled);
+    useEffect(() => { if (!trafficEnabled) setTrafficSource(null); }, [trafficEnabled]);
+    const interactionStateRef = useRef(null);
+    interactionStateRef.current = {
+        canOpen: currentConstellationState && !constellationNeedsCleanup && !stopInProgress && !promptBoxLoading,
+        canEdit: !currentConstellationState && !constellationNeedsCleanup && !stopInProgress && !promptBoxLoading,
+        selectedGroundStations,
+        statusText: constellationNeedsCleanup ? "待清理" : stopInProgress ? "停止中" : currentConstellationState ? "星座已启动" : "未启动",
+    };
+    useEffect(() => { setContextMenu(null); }, [currentConstellationState, constellationNeedsCleanup, stopInProgress, promptBoxLoading, selectedGroundStations]);
     // ---------------------------------------------------------------------------------------------
 
     // 6. 所有实例的实时位置信息
     // ---------------------------------------------------------------------------------------------
     const [allInstancePositions, setAllInstancePositions] = useState([])
     const [allLinks, setAllLinks] = useState([])
+    const [orbitPositions, setOrbitPositions] = useState({})
+    useEffect(() => {
+        if (!currentConstellationState || constellationNeedsCleanup) setOrbitPositions({});
+    }, [currentConstellationState, constellationNeedsCleanup]);
     // ---------------------------------------------------------------------------------------------
 
     // 7. 获取实例状态的 timer
@@ -169,11 +194,15 @@ export function Constellation(props) {
         }
     }, []);
 
-    // RegisterHandler 注册处理器
+    // Register once; read current lifecycle/selection state through the ref.
     function RegisterHandler() {
         let timer;
         let handler;
+        let canvas;
+        let removeCameraListener;
         let disposed = false;
+        const closeMenu = () => setContextMenu(null);
+        const preventBrowserMenu = (event) => event.preventDefault();
         const register = () => {
             if (disposed) return;
             const viewer = viewerRef.current?.cesiumElement;
@@ -181,59 +210,84 @@ export function Constellation(props) {
                 timer = setTimeout(register, 50);
                 return;
             }
-            handler = new ScreenSpaceEventHandler(viewer.scene.canvas)
-
-            // 监听点击事件
+            canvas = viewer.scene.canvas;
+            canvas.addEventListener("contextmenu", preventBrowserMenu);
+            removeCameraListener = viewer.camera.moveStart.addEventListener(closeMenu);
+            handler = new ScreenSpaceEventHandler(canvas);
             handler.setInputAction((movement) => {
-                if (disposed || viewer.isDestroyed() || constellationRunningRef.current) return;
-                let pick = viewer.scene.pick(movement.position)
-                let entity = pick?.id
-                if (!entity?.box) return;
-                // 如果是红色的话那么转为绿色
-                if (entity.box) {
-                    if (Cesium.Color.equals(entity.box.material.color._value, Cesium.Color.RED)) {
-                        // 从红色转绿色, 将地面站添加到地面站列表之中
-                        entity.box.material = Cesium.Color.GREEN.withAlpha(1)
-                        // 进行state的更新
-                        setSelectedGroundStations(prevSelectedGroundStations => {
-                            startConstellationForm.setFieldsValue({
-                                "地面站列表": [...prevSelectedGroundStations, entity.name]
-                            })
-                            return [...prevSelectedGroundStations, entity.name]
-                        })
-                    } else {
-                        // 从绿色转红色, 将地面站从地面站列表之中移除
-                        entity.box.material = Cesium.Color.RED.withAlpha(1)
-                        // 进行 state 和表单内字段的更新
-                        setSelectedGroundStations(prevSelectedGroundStations => {
-                                // 找到相应的元素的位置
-                                let index = prevSelectedGroundStations.indexOf(entity.name)
-                                // 已经找到了相应的元素
-                                if (index > -1) {
-                                    // 利用这个位置进行删除
-                                    prevSelectedGroundStations = prevSelectedGroundStations.filter((_, itemIndex) => itemIndex !== index)
-                                    // 需要调用 react 自己的方法进行设置
-                                    startConstellationForm.setFieldsValue({
-                                        "地面站列表": [...prevSelectedGroundStations]
-                                    })
-                                } else { // 如果没有找到相应的元素则需要进行报错
-                                    message.error({
-                                        content: "cannot find the ground station"
-                                    })
-                                }
-                                return [...prevSelectedGroundStations]
-                            }
-                        )
+                if (disposed || viewer.isDestroyed()) return;
+                // Coverage cones and link primitives may overlap a node. Only
+                // entities tagged as satellites/ground stations can open this menu.
+                let entity;
+                let properties;
+                for (const pick of viewer.scene.drillPick(movement.position, 8)) {
+                    const candidate = pick?.id ?? pick?.primitive?.id;
+                    const metadata = candidate?.properties?.getValue(viewer.clock.currentTime);
+                    if (metadata && ["Satellite", "GroundStation"].includes(metadata.nodeType)) {
+                        entity = candidate;
+                        properties = metadata;
+                        break;
                     }
                 }
+                if (!entity) {
+                    closeMenu();
+                    return;
+                }
+                const state = interactionStateRef.current;
+                const runtime = properties.runtime === true;
+                const containerName = properties.containerName;
+                let name = runtime ? containerName : properties.stationName;
+                if (runtime && properties.nodeType === "GroundStation") {
+                    const match = /^GroundStation-([1-9]\d*)$/.exec(containerName);
+                    const station = match && state.selectedGroundStations[Number(match[1]) - 1];
+                    if (station) name = `${station} · ${containerName}`;
+                }
+                const rect = canvas.getBoundingClientRect();
+                setContextMenu({
+                    entityId: entity.id, name, containerName, nodeType: properties.nodeType,
+                    runtime, stationName: properties.stationName,
+                    selected: state.selectedGroundStations.includes(properties.stationName),
+                    canOpen: runtime && state.canOpen, canEdit: !runtime && state.canEdit,
+                    statusText: state.statusText,
+                    x: rect.left + movement.position.x + 10,
+                    y: rect.top + movement.position.y + 8,
+                });
             }, ScreenSpaceEventType.RIGHT_CLICK);
         };
         timer = setTimeout(register, 0);
         return () => {
             disposed = true;
             clearTimeout(timer);
+            canvas?.removeEventListener("contextmenu", preventBrowserMenu);
+            removeCameraListener?.();
             if (handler && !handler.isDestroyed()) handler.destroy();
         };
+    }
+
+    function handleContextMenuAction(action, menu) {
+        setContextMenu(null);
+        const state = interactionStateRef.current;
+        const viewer = viewerRef.current?.cesiumElement;
+        if (!viewer || viewer.isDestroyed()) return;
+        const entity = viewer.entities.getById(menu.entityId);
+        if (!entity) return;
+        if (action === "shell") {
+            if (!menu.runtime || !state.canOpen || !menu.containerName) return;
+            window.open(`/instance/${encodeURIComponent(menu.containerName)}`, "_blank", "noopener,noreferrer");
+        } else if (action === "transmit") {
+            if (!menu.runtime || !state.canOpen || menu.nodeType !== "GroundStation") return;
+            setTrafficSource(menu);
+        } else if (action === "locate") {
+            viewer.flyTo(entity, {duration: 0.8, offset: new Cesium.HeadingPitchRange(0, -Math.PI / 3, 1500000)});
+        } else if (action === "addStation" || action === "removeStation") {
+            if (menu.runtime || !state.canEdit || !entity.box) return;
+            const selected = action === "addStation";
+            const stations = state.selectedGroundStations.filter((name) => name !== menu.stationName);
+            if (selected) stations.push(menu.stationName);
+            entity.box.material = (selected ? Cesium.Color.GREEN : Cesium.Color.RED).withAlpha(1);
+            setSelectedGroundStations(stations);
+            startConstellationForm.setFieldsValue({[groundStationsFieldName[0]]: stations});
+        }
     }
 
     // 获取星座的状态
@@ -250,7 +304,10 @@ export function Constellation(props) {
                 let groundStations = response.data["constellation_params"]["ground_stations"]
                 let minimumElevationAngle = response.data["constellation_params"]["minimum_elevation_angle"]
                 let timeStep = response.data["constellation_params"]["time_step"]
+                const orbital = {...DEFAULT_ORBIT_CONFIG, ...response.data.constellation_params.orbit_config};
+                setOrbitConfig(orbital);
                 startConstellationForm.setFieldsValue({
+                    orbit_config: orbital,
                     [orbitNumberFieldName[0]]: orbitNumber,
                     [satellitePerOrbitFieldName[0]]: satellitePerOrbit,
                     [groundStationsFieldName[0]]: groundStations,
@@ -340,12 +397,14 @@ export function Constellation(props) {
                         key={availableGroundStation.name}
                         name={availableGroundStation.name}
                         description={availableGroundStation.name}
+                        properties={{nodeType: "GroundStation", stationName: availableGroundStation.name, runtime: false}}
                         position={Cartesian3.fromRadians(
                             availableGroundStation.longitude,
                             availableGroundStation.latitude,
                             0,
                         )}
                     >
+                        <ConstellationNameLabel name={availableGroundStation.name} groundStation />
                         <BoxGraphics
                             dimensions={new Cesium.Cartesian3(100000, 100000, 100000)} // 长、宽、高均为 10 米
                             material={Cesium.Color.RED.withAlpha(1)}     // 颜色和透明度, 注意当一开始没有任何地面站被选中, 所以地面站的颜色为红色
@@ -375,18 +434,25 @@ export function Constellation(props) {
         getInstancePositionsRequest((response) => {
             let entities = []
             let links = []
+            // 仅展示当前支持的星座实体；链路也使用同一份过滤后的位置数据。
+            const positions = Object.fromEntries(
+                Object.entries(response.data.positions).filter(([, position]) =>
+                    position.node_type === "Satellite" || position.node_type === "GroundStation"
+                )
+            )
+            setOrbitPositions(positions)
 
             // 进行节点的放置
             // --------------------------------------------------------------------
-            for (let containerName in response.data.positions) {
+            for (let containerName in positions) {
                 // 最终创建出来的实体
                 let entity = undefined
                 // 进行节点类型名的获取
-                let typeName = response.data.positions[containerName]["node_type"]
+                let typeName = positions[containerName]["node_type"]
                 // 进行经度, 纬度, 高度的获取
-                let longitude = response.data.positions[containerName]["longitude"]
-                let latitude = response.data.positions[containerName]["latitude"]
-                let altitude = response.data.positions[containerName]["altitude"]
+                let longitude = positions[containerName]["longitude"]
+                let latitude = positions[containerName]["latitude"]
+                let altitude = positions[containerName]["altitude"]
                 // 进行位置的构建
                 let position = Cartesian3.fromRadians(
                     longitude,
@@ -394,7 +460,7 @@ export function Constellation(props) {
                     altitude
                 )
                 // 根据节点类型进行处理
-                if (typeName.includes("Satellite")) { // 如果是卫星
+                if (typeName === "Satellite") {
                     // 创建一个卫星点在指定的位置
                     entity = (
                         <Entity
@@ -403,8 +469,10 @@ export function Constellation(props) {
                             name={containerName}
                             description={containerName}
                             position={position}
+                            properties={{nodeType: "Satellite", containerName, runtime: true}}
                         >
                             <PointGraphics pixelSize={10}/>
+                            <ConstellationNameLabel name={containerName} />
                         </Entity>
                     )
 
@@ -455,8 +523,10 @@ export function Constellation(props) {
                                 latitude,
                                 altitude
                             )}
+                            properties={{nodeType: "GroundStation", containerName, runtime: true}}
                         >
                             {/*<PointGraphics pixelSize={10}/>*/}
+                            <ConstellationNameLabel name={containerName} groundStation runtime />
                             <BoxGraphics
                                 dimensions={new Cesium.Cartesian3(100000, 100000, 100000)} // 长、宽、高均为 100000 米
                                 material={Cesium.Color.GREEN.withAlpha(1)}     // 颜色和透明度, 注意当一开始没有任何地面站被选中, 所以地面站的颜色为红色
@@ -470,8 +540,10 @@ export function Constellation(props) {
                 entities.push(entity)
             }
 
-            // 如果没有则进行返回
+            // 清空不再存在或不受支持的节点及其链路。
             if (entities.length === 0) {
+                setAllInstancePositions([])
+                setAllLinks([])
                 return
             }
             // --------------------------------------------------------------------
@@ -482,30 +554,24 @@ export function Constellation(props) {
             for(let linkId in response.data.gsls) {
                 let sourceContainerName = response.data.gsls[linkId][0]
                 let targetContainerName = response.data.gsls[linkId][1]
-                if (!response.data.positions[sourceContainerName] || !response.data.positions[targetContainerName]) {
+                if (!positions[sourceContainerName] || !positions[targetContainerName]) {
                     continue
                 }
                 let lineData = [
-                    response.data.positions[sourceContainerName]["longitude"],
-                    response.data.positions[sourceContainerName]["latitude"],
-                    response.data.positions[sourceContainerName]["altitude"],
-                    response.data.positions[targetContainerName]["longitude"],
-                    response.data.positions[targetContainerName]["latitude"],
-                    response.data.positions[targetContainerName]["altitude"],
+                    positions[sourceContainerName]["longitude"],
+                    positions[sourceContainerName]["latitude"],
+                    positions[sourceContainerName]["altitude"],
+                    positions[targetContainerName]["longitude"],
+                    positions[targetContainerName]["latitude"],
+                    positions[targetContainerName]["altitude"],
                 ]
                 let GSL = (
-                    <Entity
-                        key={linkId + sourceContainerName + targetContainerName}
-                        name={linkId + sourceContainerName + targetContainerName}
-                        description={`source node ${sourceContainerName} <----> target node ${targetContainerName}`}
-                    >
-                        <PolylineGraphics
-                            positions={Cartesian3.fromRadiansArrayHeights(lineData)}
-                            material={Cesium.Color.ORANGE.withAlpha(1)}
-                            arcType={Cesium.ArcType.NONE} // 确保设置为 NONE
-                        >
-                        </PolylineGraphics>
-                    </Entity>
+                    <ConstellationTrafficLink
+                        key={`gsl:${linkId}:${sourceContainerName}:${targetContainerName}`}
+                        linkKey={`gsl:${linkId}:${sourceContainerName}:${targetContainerName}`}
+                        source={sourceContainerName} target={targetContainerName}
+                        positions={Cartesian3.fromRadiansArrayHeights(lineData)} baseColor={Cesium.Color.ORANGE}
+                    />
                 )
 
                 links.push(GSL)
@@ -517,45 +583,35 @@ export function Constellation(props) {
                 let sourceContainerName = response.data.isls[linkId][0]
                 let targetContainerName = response.data.isls[linkId][1]
                 let linkType = response.data.isls[linkId][2]
-                if (!response.data.positions[sourceContainerName] || !response.data.positions[targetContainerName]) {
+                if (!positions[sourceContainerName] || !positions[targetContainerName]) {
                     continue
                 }
                 let lineData = [
-                    response.data.positions[sourceContainerName]["longitude"],
-                    response.data.positions[sourceContainerName]["latitude"],
-                    response.data.positions[sourceContainerName]["altitude"],
-                    response.data.positions[targetContainerName]["longitude"],
-                    response.data.positions[targetContainerName]["latitude"],
-                    response.data.positions[targetContainerName]["altitude"],
+                    positions[sourceContainerName]["longitude"],
+                    positions[sourceContainerName]["latitude"],
+                    positions[sourceContainerName]["altitude"],
+                    positions[targetContainerName]["longitude"],
+                    positions[targetContainerName]["latitude"],
+                    positions[targetContainerName]["altitude"],
                 ]
                 if(linkType === "intra_orbit"){
                     let link = (
-                        <Entity
-                            key={linkId + sourceContainerName + targetContainerName}
-                            name={linkId + sourceContainerName + targetContainerName}
-                            description={`source node ${sourceContainerName} <----> target node ${targetContainerName}`}
-                        >
-                            <PolylineGraphics
-                                positions={Cartesian3.fromRadiansArrayHeights(lineData)}
-                                material={Cesium.Color.GREEN.withAlpha(1)}
-                            >
-                            </PolylineGraphics>
-                        </Entity>
+                        <ConstellationTrafficLink
+                            key={`isl:${linkId}:${sourceContainerName}:${targetContainerName}`}
+                            linkKey={`isl:${linkId}:${sourceContainerName}:${targetContainerName}`}
+                            source={sourceContainerName} target={targetContainerName}
+                            positions={Cartesian3.fromRadiansArrayHeights(lineData)} baseColor={Cesium.Color.GREEN}
+                        />
                     )
                     links.push(link)
                 } else if(linkType === "inter_orbit"){
                     let link = (
-                        <Entity
-                            key={linkId + sourceContainerName + targetContainerName}
-                            name={linkId + sourceContainerName + targetContainerName}
-                            description={`source node ${sourceContainerName} <----> target node ${targetContainerName}`}
-                        >
-                            <PolylineGraphics
-                                positions={Cartesian3.fromRadiansArrayHeights(lineData)}
-                                material={Cesium.Color.BLUE.withAlpha(1)}
-                            >
-                            </PolylineGraphics>
-                        </Entity>
+                        <ConstellationTrafficLink
+                            key={`isl:${linkId}:${sourceContainerName}:${targetContainerName}`}
+                            linkKey={`isl:${linkId}:${sourceContainerName}:${targetContainerName}`}
+                            source={sourceContainerName} target={targetContainerName}
+                            positions={Cartesian3.fromRadiansArrayHeights(lineData)} baseColor={Cesium.Color.BLUE}
+                        />
                     )
                     links.push(link)
                 } else {
@@ -607,6 +663,7 @@ export function Constellation(props) {
             }
             // 进行参数的设置
             const params = {
+                orbit_config: orbitConfig,
                 [orbitNumberFieldName[1]]: orbitNumber,
                 [satellitePerOrbitFieldName[1]]: satellitePerOrbit,
                 [groundStationsFieldName[1]]: selectedGroundStationInstances,
@@ -773,6 +830,12 @@ export function Constellation(props) {
             }
         ]
         setPromptBoxOpen(true)
+        tableValues.push(
+            {key: "orbit-altitude", paramsDescription: "标称轨道高度", paramsValue: `${orbitConfig.altitude_km} km`},
+            {key: "orbit-inclination", paramsDescription: "轨道倾角", paramsValue: `${orbitConfig.inclination_deg}°`},
+            {key: "orbit-raan", paramsDescription: "轨道面分布范围", paramsValue: `${orbitConfig.raan_span_deg}°`},
+            {key: "orbit-phase", paramsDescription: "相邻轨道相位差", paramsValue: `${orbitConfig.phase_offset_deg}°`},
+        );
         setPromptBoxTitle("启动星座")
         setPromptBoxText(
             <Table dataSource={tableValues} columns={tableColumns}></Table>
@@ -784,6 +847,7 @@ export function Constellation(props) {
     // 14. 当表单内的内容发生变化的时候的对应的处理函数
     // ---------------------------------------------------------------------------------------------
     function onStartConstellationValuesChange(changedValues) {
+        if (changedValues.orbit_config) setOrbitConfig(previous => ({...previous, ...changedValues.orbit_config}));
         // 实时更新轨道数量
         if (orbitNumberFieldName[0] in changedValues) {
             setOrbitNumber(changedValues[orbitNumberFieldName[0]])
@@ -889,6 +953,7 @@ export function Constellation(props) {
           <main className="constellation-workspace">
             <aside className="constellation-sidebar" aria-label="星座配置与运行控制">
               <Form form={startConstellationForm} name={nameOfForm} onFinishFailed={onValidateStartConstellationFailed} onFinish={onStartConstellationFinish} onValuesChange={onStartConstellationValuesChange} initialValues={{
+                orbit_config: {...DEFAULT_ORBIT_CONFIG},
                 [orbitNumberFieldName[0]]: orbitNumber,
                 [satellitePerOrbitFieldName[0]]: satellitePerOrbit,
                 [groundStationsFieldName[0]]: selectedGroundStations,
@@ -907,6 +972,8 @@ export function Constellation(props) {
                     }]}>
                       <InputNumber min={1} precision={0} disabled={currentConstellationState} changeOnWheel></InputNumber>
                     </Form.Item></div>
+                  <ConstellationOrbitSettings config={orbitConfig} orbitNumber={orbitNumber} satellitePerOrbit={satellitePerOrbit}
+                    disabled={currentConstellationState || promptBoxLoading} />
                   <Form.Item label={groundStationsFieldName[0]} name={groundStationsFieldName[0]}>
                     <Select mode="multiple" placeholder="选择地面站" maxTagCount="responsive" allowClear={true} disabled={currentConstellationState} options={availableGroundStations.map(availableGroundStation => ({
                       label: availableGroundStation.name,
@@ -927,6 +994,20 @@ export function Constellation(props) {
                       }} checkedChildren="开" unCheckedChildren="关">
                       </Switch>
                     </Form.Item></div>
+                  <div className="constellation-field-grid constellation-display-fields">
+                    <Form.Item label="卫星名称" htmlFor="show-satellite-names">
+                      <Switch id="show-satellite-names" aria-label="显示卫星名称" checked={showSatelliteNames} onChange={setShowSatelliteNames} checkedChildren="开" unCheckedChildren="关" />
+                    </Form.Item>
+                    <Form.Item label="地面站名称" htmlFor="show-ground-station-names">
+                      <Switch id="show-ground-station-names" aria-label="显示地面站名称" checked={showGroundStationNames} onChange={setShowGroundStationNames} checkedChildren="开" unCheckedChildren="关" />
+                    </Form.Item>
+                  </div>
+                  <div className="constellation-field-grid constellation-display-fields">
+                    <Form.Item label="显示轨道" htmlFor="show-orbit-guides">
+                      <Switch id="show-orbit-guides" aria-label="显示轨道" checked={showOrbits} onChange={setShowOrbits} checkedChildren="开" unCheckedChildren="关" />
+                    </Form.Item>
+                  </div>
+                  <p className="constellation-field-note">淡蓝虚线表示当前近圆轨道，彩色直线表示通信链路。轨道在启动后随位置更新；每轨至少需 3 颗卫星及完整位置数据。</p>
                   <div className="constellation-step-controls"><Form.Item label={timeStepFieldName[0]} name={timeStepFieldName[0]}>
                       <Slider min={1} max={20} value={typeof selectedTimeStep === 'number' ? selectedTimeStep : 0} />
                     </Form.Item><InputNumber min={1} max={20} precision={0} value={selectedTimeStep} onChange={value => {
@@ -948,19 +1029,28 @@ export function Constellation(props) {
             </aside>
             <section className="constellation-scene-panel" aria-label="三维星座视图">
               <div className="constellation-scene-header">
-                <div><h2><GlobalOutlined />{secondSplitContent}</h2><p>卫星位置 · 星间链路 · 地面站</p></div>
+                <div><h2><GlobalOutlined />{secondSplitContent}</h2><p>卫星位置 · 轨道曲线 · 星间链路 · 地面站</p></div>
                 <span className="constellation-scene-badge">星座仿真</span>
               </div>
-              <div className="constellation-scene"><Viewer ref={viewerRef} timeline={false} homeButton={false} geocoder={false} animation={false} navigationHelpButton={false} fullscreenButton={false} className="constellation-viewer">
+              <div className="constellation-scene"><ConstellationLabelContext.Provider value={{showSatelliteNames, showGroundStationNames, groundStationNames: selectedGroundStations}}>
+                <Viewer ref={viewerRef} timeline={false} homeButton={false} geocoder={false} animation={false} navigationHelpButton={false} fullscreenButton={false} className="constellation-viewer">
+                  {currentConstellationState && !constellationNeedsCleanup && <ConstellationOrbits positions={orbitPositions}
+                    orbitNumber={orbitNumber} satellitePerOrbit={satellitePerOrbit} show={showOrbits} />}
                   {allInstancePositions}
-                  {allLinks}
-                </Viewer></div>
+                  <ConstellationTrafficContext.Provider value={{task: traffic.task, stale: traffic.stale}}>
+                    {allLinks}
+                  </ConstellationTrafficContext.Provider>
+                </Viewer>
+              </ConstellationLabelContext.Provider></div>
+              <ConstellationTrafficCard traffic={traffic} />
               <footer className="constellation-scene-footer">
-                <div className="constellation-legend"><span><i className="satellite" />卫星</span><span><i className="ground-selected" />已选地面站</span><span><i className="ground-available" />未选地面站</span></div>
-                <span>拖拽旋转 · 滚轮缩放 · 右键选择地面站</span>
+                <div className="constellation-legend"><span><i className="satellite" />卫星</span><span><i className="orbit-guide" />近圆轨道</span><span><i className="ground-selected" />已选地面站</span><span><i className="ground-available" />未选地面站</span></div>
+                <span>拖拽旋转 · 滚轮缩放 · 右键节点打开操作菜单</span>
               </footer>
             </section>
           </main>
+          <ConstellationContextMenu menu={contextMenu} onAction={handleContextMenuAction} onClose={() => setContextMenu(null)} />
+          <ConstellationTrafficPanel source={trafficSource} traffic={traffic} onClose={() => setTrafficSource(null)} />
           <Modal title={promptBoxTitle} open={promptBoxOpen} onOk={handlePromptOkCicked} onCancel={handlePromptCancelClicked} okText={promptBoxOkText} cancelText={promptBoxCancelText} confirmLoading={promptBoxLoading} rootClassName="constellation-dialog">
             {promptBoxText}
             {stopInProgress && (

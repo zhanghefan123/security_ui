@@ -128,8 +128,8 @@ export const startAttackRequest = (maliciousNodeId, params, response_callback, e
 }
 
 // startTxRateTest 开启 tps 测速
-export const startTxRateTest = (response_callback, error_callback) => {
-    axios.post(`${UrlBase}/${startTxRateTestUrl}`).then((response)=>{
+export const startTxRateTest = (response_callback, error_callback, options = {}) => {
+    axios.post(`${UrlBase}/${startTxRateTestUrl}`, options).then((response)=>{
         response_callback(response)
     }, (error)=>{
         error_callback(error)
@@ -137,8 +137,8 @@ export const startTxRateTest = (response_callback, error_callback) => {
 }
 
 // stopTxRateTest 停止 tps 测速
-export const stopTxRateTest = (response_callback, error_callback) => {
-    axios.post(`${UrlBase}/${stopTxRateTestUrl}`).then((response)=>{
+export const stopTxRateTest = (response_callback, error_callback, options = {}) => {
+    axios.post(`${UrlBase}/${stopTxRateTestUrl}`, options).then((response)=>{
         response_callback(response)
     }, (error)=>{
         error_callback(error)

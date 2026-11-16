@@ -2,7 +2,7 @@
 // 使用独立状态，避免取消选中时恢复缺失的标签样式缓存。
 export const TOPOLOGY_SELECTED_STATE = 'topology-selected';
 
-export function createTopologySelectionStyles() {
+export function createTopologySelectionStyles(edgeStyles = {}) {
     return {
         nodeStateStyles: {
             [TOPOLOGY_SELECTED_STATE]: {
@@ -11,6 +11,7 @@ export function createTopologySelectionStyles() {
             },
         },
         edgeStateStyles: {
+            ...edgeStyles,
             [TOPOLOGY_SELECTED_STATE]: {
                 stroke: '#38bdf8',
                 lineWidth: 4,

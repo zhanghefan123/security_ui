@@ -1,5 +1,10 @@
 @import "./WorkbenchTokens.css";
 
+.constellation-orbit-settings { margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--constellation-border); }
+.constellation-orbit-summary { display: flex; flex-direction: column; gap: 6px; padding: 12px; margin-bottom: 12px; border: 1px solid #2b4357; border-radius: 8px; background: #0c1928; }
+.constellation-orbit-summary strong { color: #b9e7e2; font-size: var(--ui-body); font-weight: 500; }
+.constellation-orbit-summary span { color: #a4b6cb; font-size: var(--ui-caption); font-variant-numeric: tabular-nums; }
+
 /* Local workbench styling; no global overrides for the other routes. */
 .constellation-workbench {
     --constellation-bg: #0b1220;
@@ -128,6 +133,7 @@
 .constellation-legend > span { display: inline-flex; align-items: center; gap: 7px; }
 .constellation-legend i { width: 6px; height: 6px; }
 .constellation-legend .satellite { border-radius: 50%; background: #ffffff; }
+.constellation-legend .orbit-guide { width: 18px; height: 0; border-top: 1px dashed #86c5dc; }
 .constellation-legend .ground-selected { background: #008000; }
 .constellation-legend .ground-available { background: #ff0000; }
 .constellation-dialog .ant-modal-content { border: 1px solid #2b3d54; border-radius: 12px; background: #111d2e !important; }

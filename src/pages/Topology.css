@@ -37,19 +37,6 @@ html, body, #root {
     overflow: hidden; /* 防止内容溢出 */
 }
 
-.topology-container-topology-only {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    /* 背景图设置 */
-    background-image: url('../../public/pictures/background_new.png'); /* 请将图片放在public/pictures/目录下 */
-    background-size: cover; /* 覆盖整个容器 */
-    background-position: center top; /* 从顶部开始显示，确保顶部不被截断 */
-    background-repeat: no-repeat; /* 不重复 */
-    background-attachment: scroll; /* 改为scroll，避免fixed导致的显示问题 */
-    overflow: hidden; /* 防止内容溢出 */
-}
-
 .topology-system-header {
     position: relative;
     display: flex;

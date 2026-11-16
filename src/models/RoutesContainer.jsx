@@ -1,9 +1,8 @@
-import {Route, Routes} from "react-router-dom";
+import {Navigate, Route, Routes} from "react-router-dom";
 import {Topology} from "../pages/Topology";
 import {Constellation} from "../pages/Constellation";
 import {Instance} from "../pages/Instance";
 import {TestApp} from "../pages/Test";
-import {TopologyOnly} from "../pages/TopologyOnly";
 import {Home} from "../pages/Home";
 
 export const RoutesMapping = new Map([
@@ -12,7 +11,6 @@ export const RoutesMapping = new Map([
     [1, ["星座可视化界面", "/constellation", <Constellation/>]],
     [2, ["命令行", "/instance/:containerName", <Instance/>]],
     [3, ["测试", "/test", <TestApp/>]],
-    [4, ["单纯拓扑界面", "/topology_only", <TopologyOnly/>]]
 ])
 
 // GenerateRoutes 进行路由 Tags 的生成
@@ -31,6 +29,8 @@ export function RoutesContainer(props) {
     return (
         <Routes>
             {GenerateRoutes()}
+            {/* 兼容旧书签；导航菜单只保留主拓扑工作台。 */}
+            <Route path="/topology_only" element={<Navigate to="/topology" replace/>}/>
         </Routes>
     )
 }

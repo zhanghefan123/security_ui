@@ -1,3 +1,5 @@
+import {readTopologyProtocols} from "./topology_protocols";
+
 // getTopologyState.topology_params contains the full execution spec; its own
 // topology_params field is the graph. Keep this mapping shared by both pages.
 export function readTopologyStateParams(spec) {
@@ -11,7 +13,7 @@ export function readTopologyStateParams(spec) {
         throw new Error("后端返回的拓扑链路格式不正确");
     }
     return {
-        topology: {...topology, links: topology.links ?? []},
+        topology: {...topology, links: topology.links ?? [], protocols: readTopologyProtocols(topology, spec)},
         blockchainType: basic.blockchain_type || "无区块链",
         consensusType: basic.consensus_type || "无共识协议",
         consensusThreadCount: basic.consensus_thread_count,

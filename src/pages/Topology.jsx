@@ -1,22 +1,30 @@
+import BlockchainBenchmark from "./BlockchainBenchmark";
+import {completeTopologyEdge, createTopologyEdgeModel, getTopologyLinkType, isCompletedTopologyEdge, layoutParallelTopologyEdges} from "../entities/topology_edges";
+import TopologyEdgeFault from "./TopologyEdgeFault";
+import {createNodeContextMenu, createEdgeContextMenu, getContextMenuAction} from "../entities/topology_context_menu";
 import * as G6 from "@antv/g6";
 import React, {useEffect, useRef, useState} from "react";
 import {Alert, Button, Card, Col, Form, Input, message, Modal, Progress, Row, Select, Switch, Table, Upload} from "antd";
 import "./Topology.css";
 import "./TopologyWorkbench.css";
 import {Node} from "../entities/node"
+import {defaultTopologyProtocols, readTopologyProtocols, topologyProtocolError, topologyProtocolNames} from "../entities/topology_protocols";
+import {TopologyProtocols} from "./TopologyProtocols";
+import {TrafficCard, TrafficPanel, defaultNetworks, supported} from "./TrafficTransfer";
+import {ChainMakerTrafficCard, trafficEdgeStyles, useTopologyTraffic, useTopologyTrafficEdges} from "./TopologyTraffic";
 import {Link} from "../entities/link"
 import {readTopologyStateParams} from "../entities/topology_state"
 import {createTopologySelectionStyles, TOPOLOGY_SELECTED_STATE} from "../entities/topology_graph_styles";
 import {
     changeStartDefenceRequest,
     getStopProgress,
-    getTopologyState, GetTxRateTest, installChannelAndChaincode,
+    getTopologyState, installChannelAndChaincode,
     saveTopologyRequest, startAttack,
     startAttackRequest, startInconsistentHeartbeatAttack, startMaliciousSynchronize,
     startTopology,
-    startTxRateTest, stopAttack, stopInconsistentHeartbeatAttack, stopMaliciousSynchronize, stopNode,
+    stopAttack, stopInconsistentHeartbeatAttack, stopMaliciousSynchronize, stopNode,
     stopTopology,
-    stopTxRateTest, topologyDescriptionRequest,
+    topologyDescriptionRequest,
 } from "../requests/topology";
 import {InputNumber} from "antd/lib";
 import {ProForm} from "@ant-design/pro-components";
@@ -65,25 +73,16 @@ const TOPOLOGY_START_STEP_LABELS = {
     StartNodeContainers: "启动节点容器",
     SetVethNameSpaces: "设置 veth 命名空间",
     SetLinkParameters: "设置链路参数",
+    WaitChainMakerP2P: "等待 ChainMaker P2P 网络与进程就绪",
     UpdateHosts: "更新 hosts",
     AddDefaultRouteToFirstInterface: "添加默认路由",
 };
 
-// 所有的网路节点的可能的类型
-// ---------------------------------------------------------------------------
-// NetworkNodeType_NormalSatellite    NetworkNodeType = 0 (constellation 专用)
-// NetworkNodeType_ConsensusSatellite NetworkNodeType = 1 (constellation 专用)
-// NetworkNodeType_EtcdService        NetworkNodeType = 2 (constellation 专用)
-// NetworkNodeType_PositionService    NetworkNodeType = 3 (constellation 专用)
-// NetworkNodeType_Router             NetworkNodeType = 4 (topology 专用)
-// NetworkNodeType_NormalNode         NetworkNodeType = 5 (topology 专用)
-// NetworkNodeType_ConsensusNode      NetworkNodeType = 6 (topology 专用)
-// NetworkNodeType_MaliciousNode      NetworkNodeType = 7 (topology 专用)
-// ---------------------------------------------------------------------------
-
+// 固网可选节点类型由下方 nodeTypes 定义；卫星和地面站在星座页面管理。
 
 // 函数化组件
 export function Topology(props) {
+    const [controlsCollapsed, setControlsCollapsed] = useState(() => window.matchMedia("(max-width: 960px)").matches);
 
 
     // 1. 进行 G6 拓扑的自定义的边的注册
@@ -141,20 +140,18 @@ export function Topology(props) {
                 );
             }
         },
-        "line" // extend the built-in edge 'cubic'
+        "quadratic" // 单链路为直线；平行链路通过 curveOffset 分离。
     );
     // ---------------------------------------------------------------------------------------------
 
     // 2. 类型的定义
     // ---------------------------------------------------------------------------------------------
     // 2.1 节点类型
+    // 固网统一使用 Router；旧 LirNode 名称仅用于拓扑兼容。
     const nodeTypes = [
         "Router",
-        "NormalNode",
-        "ConsensusNode",
         "ChainMakerNode",
         "MaliciousNode",
-        "LirNode",
         "FabricPeerNode",
         "FabricOrderNode",
         "FiscoBcosNode",
@@ -247,17 +244,12 @@ export function Topology(props) {
     const [topologyNeedsCleanup, setTopologyNeedsCleanup] = useState(false)
     const [currentChannelChaincodeState, setCurrentChannelChaincodeState] = useState(false)
     const [currentAttackState, setCurrentAttackState] = useState(false)
-    const [routers, setRouters] = useState([])
-    const [normalNodes, setNormalNodes] = useState([])
-    const [consensusNodes, setConsensusNodes] = useState([])
     const [chainMakerNodes, setChainMakerNodes] = useState([])
     const [maliciousNodes, setMaliciousNodes] = useState([])
-    const [lirNodes, setLirNodes] = useState([])
     const [fabricPeerNodes, setFabricPeerNodes] = useState([])
     const [fabricOrderNodes, setFabricOrderNodes] = useState([])
     const [fiscoBcosNodes, setFiscoBcosNodes] = useState([])
     const [totalNodesCount, setTotalNodesCount] = useState(0)
-    const [txRateTestStatus, setTxRateTestStatus] = useState(false)
     // ---------------------------------------------------------------------------------------------
 
     // 6. 图的引用
@@ -267,8 +259,8 @@ export function Topology(props) {
 
     // 7. tps 的相关状态
     // ---------------------------------------------------------------------------------------------
-    const [timeList, setTimeList] = useState([1, 2, 3])
-    const [currentTps, setCurrentTps] = useState([1, 2, 3])
+    const [timeList, setTimeList] = useState([])
+    const [currentTps, setCurrentTps] = useState([])
 
     // ---------------------------------------------------------------------------------------------
 
@@ -305,7 +297,7 @@ export function Topology(props) {
             trigger: 'axis'
         },
         legend: {
-            data: ['共识速率/TPS'],
+            data: ['确认成功 TPS'],
             right: 16,
             textStyle: {
                 fontSize: 13, // 图例字体大小
@@ -313,7 +305,7 @@ export function Topology(props) {
             }
         },
         xAxis: {
-            name: "时间/S",
+            name: "开始发送后的时间/秒",
             nameLocation: "middle",
             nameGap: 28,
             type: "category",
@@ -342,7 +334,7 @@ export function Topology(props) {
             }
         },
         series: [{
-            name: '共识速率/TPS',
+            name: '确认成功 TPS',
             type: 'line',
             yAxisIndex: 0,
             data: currentTps,
@@ -361,6 +353,7 @@ export function Topology(props) {
     // ---------------------------------------------------------------------------------------------
     // 10.1 选择的节点类型
     const [selectedNodeType, setSelectedNodeType] = useState("Router")
+    const [protocols, setProtocols] = useState(defaultTopologyProtocols)
     // 10.2 选择的链路类型
     const [selectedLinkType, setSelectedLinkType] = useState("骨干链路")
     // ---------------------------------------------------------------------------------------------
@@ -390,7 +383,7 @@ export function Topology(props) {
     const [promptBoxType, setPromptBoxType] = useState()
     const [promptBoxTitle, setPromptBoxTitle] = useState("Warning");
     const [promptBoxOpen, setPromptBoxOpen] = useState(false)
-    const [promptBoxText, setPromptBoxText] = useState("cannot create multiple edges between two nodes")
+    const [promptBoxText, setPromptBoxText] = useState("")
     const [promptBoxOkText, setPromptBoxOkText] = useState("ok")
     const [promptBoxCancelText, setPromptBoxCancelText] = useState("cancel")
     const [promptBoxLoading, setPromptBoxLoading] = useState(false)
@@ -400,6 +393,17 @@ export function Topology(props) {
     const [stopProgressStep, setStopProgressStep] = useState("")
     const [stopInProgress, setStopInProgress] = useState(false)
     const stopProgressTimerRef = useRef(null)
+    const trafficEnabled = currentTopologyState && !topologyNeedsCleanup && !stopInProgress;
+    const traffic = useTopologyTraffic(trafficEnabled);
+    const [trafficSource, setTrafficSource] = useState(null);
+    const [faultEdge, setFaultEdge] = useState(null);
+    useEffect(() => { setFaultEdge(null); }, [currentTopologyState, topologyNeedsCleanup, stopInProgress]);
+    const trafficMenuRef = useRef(null);
+    trafficMenuRef.current = {enabled: trafficEnabled && !traffic.error, nodes: traffic.nodes};
+    useTopologyTrafficEdges(graph, traffic);
+    useEffect(() => {
+        if (!trafficEnabled) setTrafficSource(null);
+    }, [trafficEnabled]);
     // ---------------------------------------------------------------------------------------------
 
     // 13. 函数化组件初始化第一步 - 进行监听器的设置
@@ -463,7 +467,7 @@ export function Topology(props) {
 
         // 进行图的实例化
         const graphTmp = new G6.Graph({
-            ...createTopologySelectionStyles(),
+            ...createTopologySelectionStyles(trafficEdgeStyles),
             container: 'graph', // html 元素的 id
             // 图的宽度以及高度
             width: graphDivRef.current.clientWidth,
@@ -487,6 +491,8 @@ export function Topology(props) {
             // 默认的边
             defaultEdge: {
                 type: 'arrow-running',
+                curveOffset: 0,
+                curvePosition: 0.5,
                 style: styleForBackboneLink,
                 label: "",
             },
@@ -505,40 +511,19 @@ export function Topology(props) {
         // 图的渲染
         graphTmp.render();
         // 添加边之后的处理
-        graphTmp.on('aftercreateedge', (e) => {
-            const edgeCreate = e.edge
-            let source = edgeCreate.getSource()
-            let target = edgeCreate.getTarget()
-            let sourceId = source.getID()
-            let targetId = target.getID()
-            // 逻辑1: 防止进行重复的边的创建
-            let sameNodeEdges = graphTmp.findAll("edge", (edge) => {
-                let oneDirection = (edge.getSource().getID() === sourceId) && (edge.getTarget().getID() === targetId)
-                let anotherDirection = (edge.getSource().getID() === targetId) && (edge.getTarget().getID() === sourceId)
-                return oneDirection || anotherDirection
-            })
-            if (sameNodeEdges.length === 2) {
-                // 删除的时候, 如果删自己的就会发生错误, 状态不一致, 这个时候需要使用 setTimeout
+        graphTmp.on('aftercreateedge', ({edge}) => {
+            if (!isCompletedTopologyEdge(edge)) {
+                // G6 still accesses the new edge after this event; defer removal.
                 setTimeout(() => {
-                    graphTmp.removeItem(sameNodeEdges[0])
-                    message.error({
-                        content: "cannot create multiple edges between two nodes"
-                    })
-                }, 0)
+                    if (graphTmp.destroyed || edge.destroyed) return;
+                    graphTmp.removeItem(edge);
+                    message.error({content: "不能创建指向自身的链路"});
+                }, 0);
+                return;
             }
-            // 逻辑2: 防止创建指向自己的边
-            let edgesPointToSelf = graphTmp.findAll("edge", (edge) => {
-                return edge.getSource().getID() === edge.getTarget().getID()
-            })
-            if (edgesPointToSelf.length === 1) {
-                setTimeout(() => {
-                    graphTmp.removeItem(edgesPointToSelf[0])
-                    message.error({
-                        content: "cannot create an edge point to itself"
-                    })
-                }, 0)
-            }
+            completeTopologyEdge(graphTmp, edge);
         });
+        graphTmp.on('afterremoveitem', () => layoutParallelTopologyEdges(graphTmp));
         setGraph(graphTmp)
         setCreateGraph(1)
     }, []);
@@ -586,7 +571,6 @@ export function Topology(props) {
                 } else if (response.data["state"] === "failed" || response.data.cleanup_required) {
                     setCurrentTopologyState(true);
                     setTopologyNeedsCleanup(true);
-                    setTxRateTestStatus(false);
                     message.error({content: response.data.message || "拓扑清理未完成，请点击停止拓扑重试清理"});
                 } else if (response.data["state"] === "down") {
                     setTopologyNeedsCleanup(false);
@@ -609,12 +593,30 @@ export function Topology(props) {
     }, [createGraph]);
 
 
+    // 导入前拒绝已移除或未知的节点，避免清空现有图后静默丢失节点。
+    function validateTopologyNodeTypes(topologyParams) {
+        const supportedTypes = new Set([...nodeTypes, "LirNode"]);
+        const nodes = [...topologyParams.nodes];
+        for (const link of topologyParams.links || []) {
+            nodes.push(link.source_node, link.target_node);
+        }
+        for (const node of nodes) {
+            if (!supportedTypes.has(node?.type)) {
+                message.error(`不支持的节点类型：${node?.type ?? "未知"}，请更新拓扑文件后重新加载`);
+                return false;
+            }
+        }
+        return true;
+    }
+
     function rebuildGraphWithLinkParams(topology_params, link_params, state) {
+        if (!validateTopologyNodeTypes(topology_params)) return;
+        setProtocols(readTopologyProtocols(topology_params));
         // 需要先进行所有的节点的删除
         clearState()
         for (let i = 0; i < topology_params["nodes"].length; i++) {
             let node = topology_params["nodes"][i]
-            AddNodeLogic(node["type"], node["x"], node["y"], state, node["index"])
+            AddNodeLogic(node["type"], node["x"], node["y"], state, node["index"], node)
         }
         setTimeout(() => {
             for (let i = 0; i < topology_params["links"].length; i++) {
@@ -644,7 +646,7 @@ export function Topology(props) {
                  */
                 // ---------------------- link param add logic ----------------------
 
-                AddEdgeLogicWithText(sourceNodeId, targetNodeId, link_type, finalString)
+                AddEdgeLogicWithText(sourceNodeId, targetNodeId, link_type, finalString, link)
             }
         }, 50)
     }
@@ -698,13 +700,18 @@ export function Topology(props) {
 
     // 根据后端返回的参数重新进行图的构建
     function rebuildGraph(topology_params, state) {
+        if (!validateTopologyNodeTypes(topology_params)) return false;
+        setProtocols(readTopologyProtocols(topology_params));
+        if (!topology_params.protocols && topology_params.nodes?.some(n => n.type === "LirNode" || n.enable_path_validation != null)) {
+            message.info("旧拓扑的节点能力已合并为统一协议配置，请在启动弹窗中确认选择");
+        }
         // 根据 topology_params 确定当前的区块链的类型
         SetBlockChainTypeAccordingToTopologyParams(topology_params)
         // 需要先进行所有的节点的删除
         clearState()
         for (let i = 0; i < topology_params["nodes"].length; i++) {
             let node = topology_params["nodes"][i]
-            AddNodeLogic(node["type"], node["x"], node["y"], state, node["index"])
+            AddNodeLogic(node["type"], node["x"], node["y"], state, node["index"], node)
         }
         setTimeout(() => {
             for (let i = 0; i < topology_params["links"].length; i++) {
@@ -712,19 +719,16 @@ export function Topology(props) {
                 let sourceNodeId = link["source_node"]["type"] + "_" + link["source_node"]["index"]
                 let targetNodeId = link["target_node"]["type"] + "_" + link["target_node"]["index"]
                 let link_type = link["link_type"]
-                AddEdgeLogic(sourceNodeId, targetNodeId, link_type)
+                AddEdgeLogic(sourceNodeId, targetNodeId, link_type, link)
             }
         }, 50)
+        return true;
     }
 
     function clearState() {
         graph.clear()
-        setRouters([])
-        setNormalNodes([])
-        setConsensusNodes([])
         setChainMakerNodes([])
         setMaliciousNodes([])
-        setLirNodes([])
         setFabricOrderNodes([])
         setFabricPeerNodes([])
         setFiscoBcosNodes([])
@@ -739,68 +743,36 @@ export function Topology(props) {
         if (getState === 1) {
             let nodeMenu = undefined
             let edgeMenu = undefined
+            const closeMenusOnEscape = (event) => {
+                if (event.key === "Escape") {
+                    nodeMenu?.onMenuHide();
+                    edgeMenu?.onMenuHide();
+                }
+            };
             if (graph) {
                 // 节点菜单
                 nodeMenu = new G6.Menu({
+                    className: 'topology-context-menu',
                     offsetX: 10,
+                    offsetY: 8,
                     itemTypes: ['node'],
-                    getContent(e, graph) {
-
-                        const node = e.item;
-                        const nodeModel = node.getModel();
-                        const nodeId = nodeModel.id;
-                        if (nodeId.includes("FabricOrder")) {
-                            const outDiv = document.createElement('div');
-                            outDiv.style.width = '180px';
-                            outDiv.innerHTML = `<ul>
-                                                <li>创建webshell</li>
-                                                <li>删除节点</li>
-                                                <li>暂停节点</li>
-                                                <li>攻击主节点</li>
-                                                <li>停止攻击主节点</li>
-                                                <li>恶意向主节点同步</li>
-                                                <li>停止向恶意向主节点同步</li>
-                                                <li>取消</li>
-                                            </ul>`
-                            return outDiv
-                        } else if(nodeId.includes("ChainMaker")){
-                            const outDiv = document.createElement('div');
-                            outDiv.style.width = '180px';
-                            outDiv.innerHTML = `<ul>
-                                                <li>创建webshell</li>
-                                                <li>删除节点</li>
-                                                <li>攻击主节点</li>
-                                                <li>停止攻击主节点</li>
-                                                <li>开启广播不一致心跳</li>
-                                                <li>关闭广播不一致心跳</li>
-                                                <li>取消</li>
-                                            </ul>`
-                            return outDiv
-                        } else if(nodeId.includes("FiscoBcos")) {
-                            const outDiv = document.createElement('div');
-                            outDiv.style.width = '180px';
-                            outDiv.innerHTML = `<ul>
-                                                <li>创建webshell</li>
-                                                <li>删除节点</li>
-                                                <li>开启广播不一致心跳</li>
-                                                <li>关闭广播不一致心跳</li>
-                                                <li>取消</li>
-                                            </ul>`
-                            return outDiv
-                        } else {
-                            const outDiv = document.createElement('div');
-                            outDiv.style.width = '180px';
-                            outDiv.innerHTML = `<ul>
-                                                <li>创建webshell</li>
-                                                <li>删除节点</li>
-                                                <li>取消</li>
-                                            </ul>`
-                            return outDiv
-                        }
+                    getContent(e) {
+                        const model = e.item.getModel();
+                        const name = String(model.id).replace(/_(\d+)$/, "-$1");
+                        const node = trafficMenuRef.current.nodes.find(n => n.name === name);
+                        const canTransmit = trafficMenuRef.current.enabled && defaultNetworks.some(n => supported(node, n.value));
+                        return createNodeContextMenu(model, currentTopologyState, canTransmit);
                     },
-
                     handleMenuClick(target, item, graph) {
-                        if (target.textContent === "创建webshell") {
+                        const action = getContextMenuAction(target);
+                        if (!action) return;
+                        if (action === "transmit") {
+                            const name = String(item.getID()).replace(/_(\d+)$/, "-$1");
+                            const node = trafficMenuRef.current.nodes.find(n => n.name === name);
+                            if (trafficMenuRef.current.enabled && defaultNetworks.some(n => supported(node, n.value))) {
+                                setTrafficSource({containerName: name, name: node.label || name});
+                            }
+                        } else if (action === "shell") {
                             if (currentTopologyState) {
                                 // 进行 webshell 的创建, 跳转到实际的创建 webshell 的界面
                                 const windowProxy = window.open("_black")
@@ -812,12 +784,12 @@ export function Topology(props) {
                                     content: "still cannot create webshell"
                                 })
                             }
-                        } else if (target.textContent === "删除节点") {
+                        } else if (action === "deleteNode") {
                             setTimeout(() => {
                                 graph.removeItem(item)
                             }, 0)
                             message.success("成功删除节点" + item.getID())
-                        } else if (target.textContent === "暂停节点") {
+                        } else if (action === "pause") {
                             if (!currentTopologyState) {
                                 message.error({
                                     content: "current topology down: cannot pause node"
@@ -839,7 +811,7 @@ export function Topology(props) {
                                 })
                             }
 
-                        } else if (target.textContent === "攻击主节点") {
+                        } else if (action === "attack") {
                             if (!currentTopologyState) {
                                 message.error({
                                     content: "current topology down: cannot start attack"
@@ -860,7 +832,7 @@ export function Topology(props) {
                                 })
                             }
 
-                        } else if (target.textContent === "停止攻击主节点") {
+                        } else if (action === "stopAttack") {
                             if (!currentTopologyState) {
                                 message.error({
                                     content: "current topology down: cannot stop attack"
@@ -880,7 +852,7 @@ export function Topology(props) {
                                 })
                             }
 
-                        } else if (target.textContent === "恶意向主节点同步") {
+                        } else if (action === "sync") {
                             if (!currentTopologyState) {
                                 message.error({
                                     content: "cannot synchronize to main leader"
@@ -899,7 +871,7 @@ export function Topology(props) {
                                     })
                                 })
                             }
-                        } else if (target.textContent === "停止向恶意向主节点同步") {
+                        } else if (action === "stopSync") {
                             if (!currentTopologyState) {
                                 message.error({
                                     content: "cannot stop sychronize to main leader"
@@ -918,7 +890,7 @@ export function Topology(props) {
                                     })
                                 })
                             }
-                        } else if(target.textContent === "开启广播不一致心跳") {
+                        } else if(action === "heartbeat") {
                             if(!currentTopologyState) {
                                 message.error({
                                     content: "topology not started"
@@ -937,7 +909,7 @@ export function Topology(props) {
                                     })
                                 })
                             }
-                        } else if(target.textContent === "关闭广播不一致心跳") {
+                        } else if(action === "stopHeartbeat") {
                             if(!currentTopologyState) {
                                 message.error({
                                     content: "topology not started"
@@ -962,19 +934,19 @@ export function Topology(props) {
 
                 // 边的菜单
                 edgeMenu = new G6.Menu({
+                    className: 'topology-context-menu',
                     offsetX: 10,
+                    offsetY: 8,
                     itemTypes: ['edge'],
-                    getContent(e, graph) {
-                        const outDiv = document.createElement('div');
-                        outDiv.style.width = '180px';
-                        outDiv.innerHTML = `<ul>
-                    <li>删除边</li>
-                    <li>取消</li>
-                  </ul>`
-                        return outDiv
+                    getContent(e) {
+                        return createEdgeContextMenu(e.item.getModel());
                     },
                     handleMenuClick(target, item, graph) {
-                        if (target.textContent === "删除边") {
+                        const action = getContextMenuAction(target);
+                        if (!action) return;
+                        if (action === "edgeFault") {
+                            setFaultEdge({...item.getModel()});
+                        } else if (action === "deleteEdge") {
                             graph.removeItem(item)
                             message.success({
                                 content: "成功删除边"
@@ -989,11 +961,13 @@ export function Topology(props) {
                 })
                 graph.addPlugin(nodeMenu);
                 graph.addPlugin(edgeMenu);
+                document.addEventListener("keydown", closeMenusOnEscape);
             }
 
             // 清理插件
             return () => {
                 if (graph) {
+                    document.removeEventListener("keydown", closeMenusOnEscape);
                     graph.removePlugin(nodeMenu);
                     graph.removePlugin(edgeMenu)
                 }
@@ -1014,6 +988,8 @@ export function Topology(props) {
 
     function handlePromptOkCicked() {
         if (promptBoxType === promptBoxTypes.startTopology) { // 如果是启动拓扑的话
+            const protocolError = topologyProtocolError(protocols);
+            if (protocolError) { message.error(protocolError); return; }
             setPromptBoxLoading(true)
             // 进行所有的节点的信息的收集
             let nodesMap = {}
@@ -1024,28 +1000,20 @@ export function Topology(props) {
                 let result = nodeID.split("_")
                 let x = graphNode._cfg.model.x
                 let y = graphNode._cfg.model.y
-                let node = new Node(Number(result[1]), result[0], x, y)
+                let node = new Node(Number(result[1]), result[0], x, y, graphNode.getModel())
                 nodesMap[nodeID] = node
                 nodesList.push(node)
             })
             // 进行所有的边的信息的收集
             let links = []
-            const graphEdges = graph.getEdges()
+            const graphEdges = graph.getEdges().filter(isCompletedTopologyEdge)
             graphEdges.forEach((graphEdge) => {
-                let lineWidth = graphEdge._cfg.originStyle["edge-shape"].lineWidth
-                let lineType = ""
-                if (lineWidth === 2) {
-                    lineType = "access"
-                } else if (lineWidth === 5) {
-                    lineType = "backbone"
-                } else {
-                    console.log("unsupported line type")
-                }
+                const lineType = getTopologyLinkType(graphEdge.getModel());
                 let graphSourceNodeID = graphEdge.getSource().getID()
                 let graphTargetNodeID = graphEdge.getTarget().getID()
                 let sourceNode = nodesMap[graphSourceNodeID]
                 let targetNode = nodesMap[graphTargetNodeID]
-                links.push(new Link(sourceNode, targetNode, lineType))
+                links.push(new Link(sourceNode, targetNode, lineType, graphEdge.getModel()))
             })
             // 构建参数 - 从表单获取最新值
             const formValues = startTopologyForm.getFieldsValue();
@@ -1059,7 +1027,8 @@ export function Topology(props) {
                 consensus_thread_count: formValues[consensusThreadCountField[0]] || selectedConsensusThreadCount,
                 nodes: nodesList,
                 links: links,
-                start_defence: startDefence
+                start_defence: startDefence,
+                protocols,
             }
             console.log("params:", formValues)
             console.log("selectedConsensusType:", selectedConsensusType)
@@ -1124,7 +1093,6 @@ export function Topology(props) {
                 })
                 // 不进行状态的更新
                 setTopologyNeedsCleanup(true);
-                setTxRateTestStatus(false);
                 refreshTopologyState();
                 setPromptBoxLoading(false)
                 setPromptBoxOpen(false)
@@ -1257,7 +1225,7 @@ export function Topology(props) {
             let result = nodeID.split("_")
             let x = graphNode._cfg.model.x
             let y = graphNode._cfg.model.y
-            let node = new Node(Number(result[1]), result[0], x, y)
+            let node = new Node(Number(result[1]), result[0], x, y, graphNode.getModel())
             nodesMap[nodeID] = node
             nodesList.push(node)
         })
@@ -1266,22 +1234,14 @@ export function Topology(props) {
         // 遍历所有的图边
         // -------------------------------------------------------------------
         let links = []
-        const graphEdges = graph.getEdges()
+        const graphEdges = graph.getEdges().filter(isCompletedTopologyEdge)
         graphEdges.forEach((graphEdge) => {
-            let lineWidth = graphEdge._cfg.originStyle["edge-shape"].lineWidth
-            let lineType = ""
-            if (lineWidth === 2) {
-                lineType = "access"
-            } else if (lineWidth === 5) {
-                lineType = "backbone"
-            } else {
-                console.log("unsupported line type")
-            }
+            const lineType = getTopologyLinkType(graphEdge.getModel());
             let graphSourceNodeID = graphEdge.getSource().getID()
             let graphTargetNodeID = graphEdge.getTarget().getID()
             let sourceNode = nodesMap[graphSourceNodeID]
             let targetNode = nodesMap[graphTargetNodeID]
-            links.push(new Link(sourceNode, targetNode, lineType))
+            links.push(new Link(sourceNode, targetNode, lineType, graphEdge.getModel()))
         })
         // -------------------------------------------------------------------
 
@@ -1290,6 +1250,7 @@ export function Topology(props) {
         let data = {
             "nodes": nodesList,
             "links": links,
+            "protocols": protocols,
         }
         return JSON.stringify(data)
         // -------------------------------------------------------------------
@@ -1327,84 +1288,29 @@ export function Topology(props) {
         let successfullyAdd = false
         let fontsize = 20
         let figuresize = 60
-        if (nodeType === "Router") { // 进行路由节点的添加
-            setRouters(prevRouters => {
-                let routerId = nodeType + "_" + nodeIndex
-                let router = {
-                    id: routerId,
-                    label: routerId,
-                    x: x,
-                    y: y,
-                    size: figuresize,
-                    img: "./pictures/router.png",
-                    labelCfg: {
-                        position: 'bottom',
-                        style: {
-                            fill: '#ffffff', // 设置字体颜色
-                            fontSize: fontsize,
-                            shadowOffsetY: 10,
-                            background: {
-                                fill: ReturnLableColor(currentState),
-                                padding: [4, 4, 4, 4]
-                            }
+        if (nodeType === "Router" || nodeType === "LirNode") { // 兼容旧节点身份，协议统一由启动配置决定。
+            let routerId = nodeType + "_" + nodeIndex
+            let router = {
+                id: routerId,
+                label: routerId,
+                x: x,
+                y: y,
+                size: figuresize,
+                img: "./pictures/router.png",
+                labelCfg: {
+                    position: 'bottom',
+                    style: {
+                        fill: '#ffffff', // 设置字体颜色
+                        fontSize: fontsize,
+                        shadowOffsetY: 10,
+                        background: {
+                            fill: ReturnLableColor(currentState),
+                            padding: [4, 4, 4, 4]
                         }
                     }
                 }
-                graph.addItem('node', router);
-                return [...prevRouters, routerId]
-            })
-            successfullyAdd = true
-        } else if (nodeType === "NormalNode") { // 进行普通节点的添加
-            setNormalNodes(prevNormalNodes => {
-                let normalNodeId = nodeType + "_" + nodeIndex
-                let normalNode = {
-                    id: normalNodeId,
-                    label: normalNodeId,
-                    x: x,
-                    y: y,
-                    size: figuresize,
-                    img: './pictures/normalNode.png',
-                    labelCfg: {
-                        position: 'bottom',
-                        style: {
-                            fill: '#ffffff', // 设置字体颜色
-                            fontSize: fontsize,
-                            background: {
-                                fill: ReturnLableColor(currentState),
-                                padding: [4, 4, 4, 4]
-                            }
-                        }
-                    }
-                }
-                graph.addItem('node', normalNode);
-                return [...prevNormalNodes, normalNodeId]
-            })
-            successfullyAdd = true
-        } else if (nodeType === "ConsensusNode") { // 进行共识节点的添加
-            setConsensusNodes(prevConsensusNodes => {
-                let consensusNodeId = nodeType + "_" + nodeIndex
-                let consensusNode = {
-                    id: consensusNodeId,
-                    label: consensusNodeId,
-                    x: x,
-                    y: y,
-                    size: figuresize,
-                    img: './pictures/consensusNode.png',
-                    labelCfg: {
-                        position: 'bottom',
-                        style: {
-                            fill: '#ffffff', // 设置字体颜色
-                            fontSize: fontsize,
-                            background: {
-                                fill: ReturnLableColor(currentState),
-                                padding: [4, 4, 4, 4]
-                            }
-                        }
-                    }
-                }
-                graph.addItem('node', consensusNode);
-                return [...prevConsensusNodes, consensusNodeId]
-            })
+            }
+            graph.addItem('node', router);
             successfullyAdd = true
         } else if (nodeType === "ChainMakerNode") { // 进行长安链节点的添加
             setChainMakerNodes(prevChainMakerNodes => {
@@ -1456,32 +1362,6 @@ export function Topology(props) {
                 }
                 graph.addItem('node', maliciousNode);
                 return [...prevMaliciousNodes, maliciousNodeId]
-            })
-            successfullyAdd = true
-        } else if (nodeType === "LirNode") { // 进行 lir 节点的添加
-            setLirNodes(prevLirNodes => {
-                let lirNodeId = nodeType + "_" + nodeIndex
-                let lirNode = {
-                    id: lirNodeId,
-                    label: lirNodeId,
-                    x: x,
-                    y: y,
-                    size: figuresize,
-                    img: "./pictures/lirNode.png",
-                    labelCfg: {
-                        position: 'bottom',
-                        style: {
-                            fill: '#ffffff', // 设置字体颜色
-                            fontSize: fontsize,
-                            background: {
-                                fill: ReturnLableColor(currentState),
-                                padding: [4, 4, 4, 4]
-                            }
-                        }
-                    }
-                }
-                graph.addItem("node", lirNode)
-                return [...prevLirNodes, lirNode]
             })
             successfullyAdd = true
         } else if (nodeType === "FabricPeerNode") {
@@ -1574,38 +1454,14 @@ export function Topology(props) {
     }
 
     // 18.4 边添加的逻辑
-    function AddEdgeLogic(sourceNodeId, targetNodeId, link_type) {
-        if (link_type === "access") {
-            graph.addItem("edge", {
-                source: sourceNodeId,
-                target: targetNodeId,
-                style: styleForAccessLink,
-            })
-        } else if (link_type === "backbone") {
-            graph.addItem("edge", {
-                source: sourceNodeId,
-                target: targetNodeId,
-                style: styleForBackboneLink,
-            })
-        }
+    function AddEdgeLogic(sourceNodeId, targetNodeId, link_type, metadata = {}) {
+        AddEdgeLogicWithText(sourceNodeId, targetNodeId, link_type, "", metadata);
     }
 
-    function AddEdgeLogicWithText(sourceNodeId, targetNodeId, link_type, text) {
-        if (link_type === "access") {
-            graph.addItem("edge", {
-                source: sourceNodeId,
-                target: targetNodeId,
-                style: styleForAccessLink,
-                label: text,
-            })
-        } else if (link_type === "backbone") {
-            graph.addItem("edge", {
-                source: sourceNodeId,
-                target: targetNodeId,
-                style: styleForBackboneLink,
-                label: text,
-            })
-        }
+    function AddEdgeLogicWithText(sourceNodeId, targetNodeId, link_type, text, metadata = {}) {
+        const style = link_type === "access" ? styleForAccessLink : styleForBackboneLink;
+        graph.addItem("edge", createTopologyEdgeModel(graph, sourceNodeId, targetNodeId, link_type, style, metadata, text));
+        layoutParallelTopologyEdges(graph);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -1709,9 +1565,10 @@ export function Topology(props) {
                 "topology_name": changedValues[networkTopologyField[0]],
             }
             topologyDescriptionRequest(params, (response) => {
-                message.success(`成功切换到 ${changedValues[networkTopologyField[0]]} 拓扑`)
                 console.log("topology_description", response.data["topology_description"])
-                rebuildGraph(JSON.parse(response.data["topology_description"]))
+                if (rebuildGraph(JSON.parse(response.data["topology_description"]))) {
+                    message.success(`成功切换到 ${changedValues[networkTopologyField[0]]} 拓扑`)
+                }
             }, (error) => {
                 message.error("切换拓扑失败")
             })
@@ -1846,7 +1703,7 @@ export function Topology(props) {
             fileReader.onload = (e) => {
                 const fileContent = e.target.result
                 let topologyParams = JSON.parse(fileContent)
-                rebuildGraph(topologyParams, false)
+                if (!rebuildGraph(topologyParams, false)) return;
                 message.success({
                     content: "成功加载拓扑"
                 })
@@ -1862,63 +1719,6 @@ export function Topology(props) {
         showUploadList: false
     }
     // ---------------------------------------------------------------------------------------------
-
-    // 24. 开启共识和停止共识按钮的回调函数
-    // ---------------------------------------------------------------------------------------------
-    useEffect(() => {
-        if (!txRateTestStatus || topologyNeedsCleanup) return;
-        let cancelled = false;
-        let timer;
-        const poll = () => {
-            GetTxRateTest(response => {
-                if (cancelled) return;
-                setTimeList(response.data.time_list);
-                setCurrentTps(response.data.rate_list);
-                timer = setTimeout(poll, 1000);
-            }, error => {
-                if (cancelled) return;
-                message.error(error.response?.data?.message || "获取 TPS 失败");
-                setTxRateTestStatus(false);
-            });
-        };
-        timer = setTimeout(poll, 1000);
-        return () => { cancelled = true; clearTimeout(timer); };
-    }, [txRateTestStatus, topologyNeedsCleanup]);
-
-    function startTxRateTestClicked() {
-        startTxRateTest((response) => {
-            setTimeList(response.data["time_list"])
-            setCurrentTps(response.data["rate_list"])
-            message.success({
-                content: "开启共识成功"
-            })
-            setTxRateTestStatus(true)
-
-        }, (error) => {
-            message.error({
-                content: "开启共识失败"
-            })
-            setTxRateTestStatus(false)
-        })
-    }
-
-    function stopTxRateTestClicked() {
-        stopTxRateTest((response) => {
-            // 进行计时器的停止
-            // 成功停止共识
-            message.success({
-                content: "成功停止共识"
-            })
-            // 将 timeList 和 rateList 重新设置成为默认值
-            setTimeList([1, 2, 3])
-            setCurrentTps([1, 2, 3])
-            setTxRateTestStatus(false)
-        }, (error) => {
-            message.error({
-                content: "停止共识失败"
-            })
-        })
-    }
 
     function installChannelAndChaincodeClicked() {
         setPromptBoxType(promptBoxTypes.installChannelandChainCode)
@@ -1969,13 +1769,19 @@ export function Topology(props) {
                 <h1>链路感知的安全可控路由原型系统</h1>
               </div>
             </div>
-            <div className={"topology-status" + (currentTopologyState && !topologyNeedsCleanup ? " is-active" : "")}>
-              <span className="topology-status-dot" />
-              {topologyNeedsCleanup ? "待清理" : currentTopologyState ? "拓扑运行中" : "拓扑未启动"}
+            <div className="topology-header-actions">
+              <div className={"topology-status" + (currentTopologyState && !topologyNeedsCleanup ? " is-active" : "")}>
+                <span className="topology-status-dot" />
+                {topologyNeedsCleanup ? "待清理" : currentTopologyState ? "拓扑运行中" : "拓扑未启动"}
+              </div>
+              <Button aria-controls="topology-controls" aria-expanded={!controlsCollapsed}
+                  onClick={() => setControlsCollapsed(collapsed => !collapsed)}>
+                {controlsCollapsed ? "展开配置" : "收起配置"}
+              </Button>
             </div>
           </header>
-          <main className="topology-workspace">
-            <section className="topology-controls" aria-label="拓扑与安全配置">
+          <main className={"topology-workspace" + (controlsCollapsed ? " is-controls-collapsed" : "")}>
+            <section id="topology-controls" className="topology-controls" aria-label="拓扑与安全配置" hidden={controlsCollapsed} tabIndex={0}>
               <Card className="topology-panel topology-toolbar" title={<span><span className="topology-section-number">01</span>拓扑配置</span>} extra={<span className="topology-panel-caption">构建与管理</span>}>
                 <div className="topology-toolbar-grid">
                   <div className="topology-tool-field"><label>节点类型</label><div className="topology-node-actions"><Select defaultValue="Router" onChange={value => {
@@ -2000,133 +1806,122 @@ export function Topology(props) {
                       }
                     }} aria-label="链路类型">
                     </Select></div>
+                </div>
+                <div className="topology-toolbar-footer">
+                  <div className="topology-capability-action">{currentTopologyState ? "运行协议：" : "启动时选择协议："}{topologyProtocolNames(protocols).join(" · ") || "未启用路由协议"}</div>
                   <div className="topology-file-actions"><Button onClick={saveTopology} type="default" icon={<SaveOutlined />}>保存拓扑</Button><Upload {...uploadProps}>
                       <Button icon={<UploadOutlined />}>上传拓扑</Button>
                     </Upload></div>
                 </div>
               </Card>
-              <div className="topology-configuration-grid">
-                <Card className="topology-panel topology-system-config" title={<span><span className="topology-section-number">02</span>区块链系统配置</span>}>
-                  <Form form={startTopologyForm} name={"topology start form"} onFinishFailed={onValidateStartTopologyFailed} onFinish={onStartTopologyFinish} onValuesChange={onStartTopologyValuesChange} initialValues={{
-                    [networkTopologyField[0]]: selectedNetworkTopology,
-                    [blockchainTypeField[0]]: selectedBlockchain,
-                    [consensusTypeField[0]]: selectedConsensusType,
-                    [accessLinkBandwidthField[0]]: selectedAccessLinkBandwidth,
-                    [consensusNodeCpuField[0]]: selectedConsensusNodeCpuLimit,
-                    [consensusNodeMemoryField[0]]: selectedConsensusNodeMemoryLimit,
-                    [consensusThreadCountField[0]]: selectedConsensusThreadCount,
-                    [totalNodesCountField[0]]: totalNodesCount
-                  }} layout="vertical" className="topology-settings-form">
-                    <Row gutter={[12, 0]}>
-                      <Col span={24}>
-                        <Form.Item label={networkTopologyField[0]} name={networkTopologyField[0]} rules={[{
-                          required: true,
-                          message: "请选择网络环境"
-                        }]}>
-                          <Select disabled={currentTopologyState} value={selectedNetworkTopology} style={{
-                            width: "100%"
-                          }} options={topologyOptions} />
-                        </Form.Item>
-                      </Col>
-                    </Row>
-                    <Row gutter={[12, 0]}>
-                      <Col span={12}>
-                        <Form.Item label={blockchainTypeField[0]} name={blockchainTypeField[0]} rules={[{
-                          required: false,
-                          message: "请选择区块链"
-                        }]}>
-                          <Select disabled={currentTopologyState} value={selectedBlockchain} options={blockchainTypes.map(blockchainType => ({
-                            label: blockchainType,
-                            value: blockchainType
-                          }))} style={{
-                            width: "100%"
-                          }} />
-                        </Form.Item>
-                      </Col>
-                      <Col span={12}>
-                        <Form.Item label={consensusTypeField[0]} name={consensusTypeField[0]} rules={[{
-                          required: false,
-                          message: "请选择共识协议"
-                        }]}>
-                          <Select disabled={currentTopologyState} value={selectedConsensusType} options={availableConsensusTypes.map(consensus => ({
-                            label: consensus,
-                            value: consensus
-                          }))} />
-                        </Form.Item>
-                      </Col>
-                    </Row>
-                    <Row gutter={[12, 0]}>
-                      <Col span={12}>
-                        <Form.Item label={accessLinkBandwidthField[1]}><Input value="由后端配置控制" disabled /></Form.Item>
-                      </Col>
-                      <Col span={12}>
-                        <Form.Item label={consensusNodeCpuField[1]} name={consensusNodeCpuField[0]} rules={[{
-                          required: true,
-                          message: "请选择共识节点CPU数量限制"
-                        }]}>
-                          <InputNumber disabled={currentTopologyState} placeholder={`${selectedConsensusNodeCpuLimit}`} min={0} style={{
-                            width: "100%"
-                          }} changeOnWheel>
-                          </InputNumber>
-                        </Form.Item>
-                      </Col>
-                    </Row>
-                    <Row gutter={[12, 0]}>
-                      <Col span={12}>
-                        <Form.Item label={consensusNodeMemoryField[1]} name={consensusNodeMemoryField[0]} rules={[{
-                          required: true,
-                          message: "请选择共识节点内存限制"
-                        }]}>
-                          <InputNumber disabled={currentTopologyState} placeholder={`${selectedConsensusNodeMemoryLimit}`} min={0} style={{
-                            width: "100%"
-                          }} changeOnWheel>
-                          </InputNumber>
-                        </Form.Item>
-                      </Col>
-                      <Col span={12}>
-                        <Form.Item label={consensusThreadCountField[0]} name={consensusThreadCountField[0]} rules={[{
-                          required: true,
-                          message: "请选择共识节点内存限制"
-                        }]}>
-                          <InputNumber disabled={currentTopologyState} placeholder={`${selectedConsensusThreadCount}`} min={0} style={{
-                            width: "100%"
-                          }} changeOnWheel>
-                          </InputNumber>
-                        </Form.Item>
-                      </Col>
-                    </Row>
-                    <Row style={{
-                      display: "none"
-                    }}>
-                      <Form.Item label={totalNodesCountField[0]} name={totalNodesCountField[0]} rules={[{
-                        validator: (rule, value, callback) => {
-                          if (value === 0) {
-                            return Promise.reject("拓扑至少存在一个节点");
-                          } else {
-                            return Promise.resolve();
-                          }
-                        }
+              <Card className="topology-panel topology-system-config" title={<span><span className="topology-section-number">02</span>启动配置</span>}>
+                <Form form={startTopologyForm} name={"topology start form"} onFinishFailed={onValidateStartTopologyFailed} onFinish={onStartTopologyFinish} onValuesChange={onStartTopologyValuesChange} initialValues={{
+                  [networkTopologyField[0]]: selectedNetworkTopology,
+                  [blockchainTypeField[0]]: selectedBlockchain,
+                  [consensusTypeField[0]]: selectedConsensusType,
+                  [accessLinkBandwidthField[0]]: selectedAccessLinkBandwidth,
+                  [consensusNodeCpuField[0]]: selectedConsensusNodeCpuLimit,
+                  [consensusNodeMemoryField[0]]: selectedConsensusNodeMemoryLimit,
+                  [consensusThreadCountField[0]]: selectedConsensusThreadCount,
+                  [totalNodesCountField[0]]: totalNodesCount
+                }} layout="vertical" className="topology-settings-form">
+                  <Row gutter={[12, 0]}>
+                    <Col span={24}>
+                      <Form.Item label={networkTopologyField[0]} name={networkTopologyField[0]} rules={[{
+                        required: true,
+                        message: "请选择网络环境"
                       }]}>
-                        <InputNumber></InputNumber>
+                        <Select disabled={currentTopologyState} value={selectedNetworkTopology} style={{
+                          width: "100%"
+                        }} options={topologyOptions} />
                       </Form.Item>
-                    </Row>
-                    {}
-                    {}
-                    <Row gutter={[12, 0]} className="topology-form-actions">
-                      <Col span={8}>
-                        <Button type={"primary"} disabled={currentTopologyState} htmlType={"submit"}>启动拓扑</Button>
-                      </Col>
-                      <Col span={8}>
-                        <Button type={"primary"} danger disabled={!currentTopologyState} onClick={StopTopology}>停止拓扑</Button>
-                      </Col>
-                      <Col span={8}>
-                        <Button type={"primary"} disabled={!currentTopologyState || topologyNeedsCleanup} onClick={installChannelAndChaincodeClicked}>安装链码</Button>
-                      </Col>
-                    </Row>
-                  </Form>
-                </Card>
-                <div className="topology-security-stack">
-                  <Card className="topology-panel topology-attack-config" title={<span><span className="topology-section-number">03</span>攻击配置</span>}>
+                    </Col>
+                  </Row>
+                  <Row gutter={[12, 0]}>
+                    <Col span={12}>
+                      <Form.Item label={blockchainTypeField[0]} name={blockchainTypeField[0]} rules={[{
+                        required: false,
+                        message: "请选择区块链"
+                      }]}>
+                        <Select disabled={currentTopologyState} value={selectedBlockchain} options={blockchainTypes.map(blockchainType => ({
+                          label: blockchainType,
+                          value: blockchainType
+                        }))} style={{
+                          width: "100%"
+                        }} />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item label={consensusTypeField[0]} name={consensusTypeField[0]} rules={[{
+                        required: false,
+                        message: "请选择共识协议"
+                      }]}>
+                        <Select disabled={currentTopologyState} value={selectedConsensusType} options={availableConsensusTypes.map(consensus => ({
+                          label: consensus,
+                          value: consensus
+                        }))} />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                  <Row gutter={[12, 0]}>
+                    <Col span={12}>
+                      <Form.Item label={consensusNodeCpuField[1]} name={consensusNodeCpuField[0]} rules={[{required: true, message: "请选择共识节点 CPU 数量限制"}]}>
+                        <InputNumber disabled={currentTopologyState} min={0} changeOnWheel />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item label={consensusNodeMemoryField[1]} name={consensusNodeMemoryField[0]} rules={[{required: true, message: "请选择共识节点内存限制"}]}>
+                        <InputNumber disabled={currentTopologyState} min={0} changeOnWheel />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                  <Form.Item name={consensusThreadCountField[0]} hidden><InputNumber /></Form.Item>
+                  <p className="topology-section-note">接入链路带宽由后端配置控制；路由协议在启动时选择。</p>
+                  <Row style={{
+                    display: "none"
+                  }}>
+                    <Form.Item label={totalNodesCountField[0]} name={totalNodesCountField[0]} rules={[{
+                      validator: (rule, value, callback) => {
+                        if (value === 0) {
+                          return Promise.reject("拓扑至少存在一个节点");
+                        } else {
+                          return Promise.resolve();
+                        }
+                      }
+                    }]}>
+                      <InputNumber></InputNumber>
+                    </Form.Item>
+                  </Row>
+                  <Row gutter={[12, 0]} className="topology-form-actions">
+                    <Col span={8}>
+                      <Button type={"primary"} disabled={currentTopologyState} htmlType={"submit"}>启动拓扑</Button>
+                    </Col>
+                    <Col span={8}>
+                      <Button type={"primary"} danger disabled={!currentTopologyState} onClick={StopTopology}>停止拓扑</Button>
+                    </Col>
+                    {selectedBlockchain === "fabric" && <Col span={8}>
+                      <Button disabled={!currentTopologyState || topologyNeedsCleanup} onClick={installChannelAndChaincodeClicked}>安装链码</Button>
+                    </Col>}
+                  </Row>
+                </Form>
+              </Card>
+              {selectedBlockchain !== "无区块链" && <Card className="topology-panel topology-benchmark-panel" title={<span><span className="topology-section-number">03</span>交易压测</span>} extra={<span className="topology-panel-caption">{selectedBlockchain}</span>}>
+                <BlockchainBenchmark ready={currentTopologyState && !topologyNeedsCleanup}
+                    isFisco={selectedBlockchain === "fisco-bcos"} onTimes={setTimeList} onRates={setCurrentTps}>
+                  <div className="topology-chart-heading"><span>成功确认 TPS</span><span>从开始发送计时 · 秒</span></div>
+                  <div className="topology-metrics-chart">
+                    <ReactECharts option={rateOption} style={{position: "absolute", inset: 0, height: "100%", width: "100%"}} />
+                  </div>
+                </BlockchainBenchmark>
+              </Card>}
+              <Card className="topology-panel topology-security-config" title={<span><span className="topology-section-number">{selectedBlockchain === "无区块链" ? "03" : "04"}</span>攻击与防御</span>} extra={<span className="topology-panel-caption">实验控制</span>}>
+                <div className="topology-runtime-row">
+                  <span className="topology-runtime-label"><SafetyCertificateOutlined />安全防御</span>
+                  <Switch value={startDefence} disabled={topologyNeedsCleanup} onChange={onStartDefenceChange} aria-label="安全防御" checkedChildren="开" unCheckedChildren="关" />
+                </div>
+                <details className="topology-disclosure topology-attack-disclosure">
+                  <summary>攻击配置<span className="topology-disclosure-hint">{currentAttackState ? "攻击进行中" : "按需展开"}</span></summary>
+                  <div className="topology-disclosure-body">
                     <Form name={"attack start form"} onFinishFailed={onValidateStartAttackFailed} onFinish={onStartAttackFinish} onValuesChange={onStartAttackValuesChange} initialValues={{
                       [attackThreadCountField[0]]: selectedAttackThreadCount,
                       [attackTypeField[0]]: selectedAttackType,
@@ -2199,30 +1994,13 @@ export function Topology(props) {
                         </Col>
                       </Row>
                     </Form>
-                  </Card>
-                  <Card className="topology-panel topology-runtime-config" title="运行控制">
-                    <div className="topology-runtime-row">
-                      <span className="topology-runtime-label">共识配置</span>
-                      <div className="topology-consensus-actions"><Button type={"primary"} onClick={startTxRateTestClicked} disabled={txRateTestStatus || !currentTopologyState || topologyNeedsCleanup}>开始共识</Button>
-                        <Button type={"primary"} htmlType={"submit"} onClick={stopTxRateTestClicked} disabled={!txRateTestStatus} danger>停止共识</Button></div>
-                    </div>
-                    <div className="topology-runtime-row">
-                      <span className="topology-runtime-label"><SafetyCertificateOutlined />安全防御</span>
-                      <Switch value={startDefence} disabled={topologyNeedsCleanup} onChange={onStartDefenceChange} aria-label="安全防御" checkedChildren="开" unCheckedChildren="关" />
-                    </div>
-                  </Card>
-                </div>
-              </div>
-              <Card className="topology-panel topology-metrics" title={<span><span className="topology-section-number">04</span>共识性能监测</span>} extra={<span className="topology-panel-caption">TPS / 时间</span>}>
-                <div className="topology-metrics-chart">
-                  <ReactECharts option={rateOption} style={{
-                    position: "absolute",
-                    inset: 0,
-                    height: "100%",
-                    width: "100%"
-                  }} />
-                </div>
+                  </div>
+                </details>
               </Card>
+              {trafficEnabled && (traffic.p2p || traffic.task || traffic.error) && <div className="topology-traffic-summary">
+                <ChainMakerTrafficCard traffic={traffic} />
+                <TrafficCard traffic={traffic} />
+              </div>}
             </section>
             <div className="topology-visuals">
               <section className="topology-canvas-panel" aria-label="网络拓扑画布">
@@ -2241,12 +2019,22 @@ export function Topology(props) {
                 </div>
                 <div className="topology-canvas-footer">
                   <div className="topology-legend"><span><i className="access-link" />接入链路</span><span><i className="backbone-link" />骨干链路</span></div>
-                  <span>滚轮缩放 · 拖拽画布</span>
+                  <span>滚轮缩放 · 拖拽画布 · 运行后右键节点发起单播</span>
                 </div>
               </section>
             </div>
           </main>
-          <Modal title={promptBoxTitle} open={promptBoxOpen} onOk={handlePromptOkCicked} onCancel={handlePromptCancelCicked} okText={promptBoxOkText} cancelText={promptBoxCancelText} confirmLoading={promptBoxLoading} rootClassName="topology-dialog">
+          {faultEdge && !topologyNeedsCleanup && !stopInProgress && <TopologyEdgeFault
+              key={`${faultEdge.id}:${currentTopologyState}`} edge={faultEdge} running={currentTopologyState}
+              onClose={() => setFaultEdge(null)} onConfigured={(metadata, save) => {
+                  const item = graph?.findById(faultEdge.id);
+                  if (!item || item.destroyed) { message.error("链路已移除，请重新选择"); return; }
+                  graph.updateItem(item, metadata);
+                  if (save) saveTopology();
+              }} />}
+          <TrafficPanel source={trafficSource} onClose={() => setTrafficSource(null)} traffic={traffic} />
+          <Modal title={promptBoxTitle} width={promptBoxType === promptBoxTypes.startTopology ? 720 : 520} open={promptBoxOpen} onOk={handlePromptOkCicked} onCancel={handlePromptCancelCicked} okText={promptBoxOkText} cancelText={promptBoxCancelText} confirmLoading={promptBoxLoading} rootClassName="topology-dialog">
+            {promptBoxType === promptBoxTypes.startTopology && <TopologyProtocols value={protocols} onChange={setProtocols} disabled={promptBoxLoading} hasChainmaker={chainMakerNodes.length > 0} />}
             {promptBoxText}
             {stopInProgress && (
               <div style={{marginTop: 12}}>

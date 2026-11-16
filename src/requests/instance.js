@@ -3,35 +3,13 @@ import {UrlBase} from "./base";
 
 const startWebShellUrl = "startWebShell"
 const stopWebShellUrl = "stopWebShell"
-const startCaptureInterfaceRateUrl = "startCaptureInterfaceRate"
-const stopCaptureInterfaceRateUrl = "stopCaptureInterfaceRate"
 
-
-export const startWebShell = (params, response_callback, error_callback) => {
-    axios.post(`${UrlBase}/${startWebShellUrl}`, params).then((response)=>{
-        response_callback(response)
-    }, (error)=>{
-        error_callback(error)
-    })
-}
-
-export const stopWebShell = (params, response_callback, error_callback) => {
-    axios.post(`${UrlBase}/${stopWebShellUrl}`, params).then((response)=>{
-        response_callback(response)
-    }, (error)=>{
-        error_callback(error)
-    })
-}
-
-export const startCaptureInterfaceRate = (params, response_callback, error_callback) => {
-    axios.post(`${UrlBase}/${startCaptureInterfaceRateUrl}`, params).then((response)=>{
-        response_callback(response)
-    }, (error)=>{
-        error_callback(error)
-    })
-}
-
-export const stopCaptureInterfaceRate = (params) => {
-    window.navigator.sendBeacon(`${UrlBase}/${stopCaptureInterfaceRateUrl}`, JSON.stringify(params))
-}
-
+export const getNodeDetails = (containerName, signal) => axios.post(`${UrlBase}/getNodeDetails`, {container_name: containerName}, {signal});
+export const openNodeShell = (containerName) => axios.post(`${UrlBase}/${startWebShellUrl}`, {container_name: containerName});
+export const closeNodeShell = (pid) => axios.post(`${UrlBase}/${stopWebShellUrl}`, {pid});
+export const releaseNodeShell = (pid) => {
+    const body = JSON.stringify({pid});
+    if (!window.navigator.sendBeacon?.(`${UrlBase}/${stopWebShellUrl}`, body)) {
+        fetch(`${UrlBase}/${stopWebShellUrl}`, {method: "POST", body, keepalive: true}).catch(() => {});
+    }
+};

@@ -1,5 +1,5 @@
 /* Shared readable sizing, scoped to the two workbenches and their popups. */
-:is(.topology-workbench, .constellation-workbench, .topology-dialog, .constellation-dialog, .constellation-select-dropdown) {
+:is(.topology-workbench, .constellation-workbench, .instance-workbench, .topology-dialog, .constellation-dialog, .constellation-select-dropdown) {
     --ui-body: clamp(0.875rem, 0.82rem + 0.15vw, 1rem);
     --ui-caption: clamp(0.75rem, 0.72rem + 0.08vw, 0.8125rem);
     --ui-heading: clamp(1rem, 0.94rem + 0.16vw, 1.125rem);

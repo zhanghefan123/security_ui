@@ -1,670 +1,152 @@
-import {Card, Row, Tabs, Typography, message, Col, Button} from "antd";
 import React, {useEffect, useState} from "react";
-import {startWebShell, stopWebShell, startCaptureInterfaceRate, stopCaptureInterfaceRate} from "../requests/instance"
-import {useParams} from "react-router-dom";
-import ReactECharts from 'echarts-for-react'
-import './Instance.css'
+import {Alert, Button, Card, ConfigProvider, Empty, Spin, Tabs, Tag} from "antd";
+import {ArrowLeftOutlined, CodeOutlined, PauseCircleOutlined, PlayCircleOutlined, ReloadOutlined} from "@ant-design/icons";
+import {Link, useParams} from "react-router-dom";
+import {getNodeDetails, openNodeShell, closeNodeShell, releaseNodeShell} from "../requests/instance";
+import "./Instance.css";
 
-export function Instance(props) {
+const errorText = (error) => error?.response?.data?.message || error?.message || "请求失败，请重试";
+const formatBytes = (value) => value == null ? "—" : value >= 1024 ** 3
+    ? `${(value / 1024 ** 3).toFixed(2)} GiB` : `${(value / 1024 ** 2).toFixed(1)} MiB`;
 
-    // 1. 从 url 之中获取到的一些参数
-    const containerName= useParams().containerName
+function TextSections({sections, emptyText}) {
+    if (!sections?.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText}/>;
+    return sections.map((section) => <section className="instance-text-section" key={section.name}>
+        <h3>{section.name}</h3>
+        {section.error && <Alert type="warning" showIcon message="读取失败" description={section.error}/>}
+        {!section.error && <pre>{section.content || "暂无条目"}</pre>}
+        {section.truncated && <p>内容较长，仅显示前 128 KiB，可在终端中查看完整内容。</p>}
+    </section>);
+}
 
-    // 2. 一些状态属性
-    const [tabs, setTabs] = useState([])
-    const [activeTab, setActiveTab] = useState()
-    const [timeList, setTimeList] = useState([])
-    const [interfaceRateList, setInterfaceRateList] = useState([])
-    const [cpuRatioList, setCpuRatioList] = useState([])
-    const [memoryList, setMemoryList] = useState([])
-    const [blockRatioList, setBlockRatioList] = useState([])
-    const [connectedList, setConnectedList] = useState([])
-    const [halfConnectedList, setHalfConnectedList] = useState([])
-    const [timeoutList, setTimeoutList] = useState([])
-    const [messageCountList, setMessageCountList] = useState([])
+export function Instance() {
+    const {containerName = ""} = useParams();
+    const name = containerName.replace(/_(\d+)$/, "-$1");
+    const isConstellationNode = /^(Satellite|GroundStation)-\d+$/.test(name);
+    const [snapshot, setSnapshot] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [detailsError, setDetailsError] = useState("");
+    const [refresh, setRefresh] = useState(0);
+    const [autoRefresh, setAutoRefresh] = useState(false);
+    const [shell, setShell] = useState(null);
+    const [shellError, setShellError] = useState("");
+    const [shellAttempt, setShellAttempt] = useState(0);
+    const [frameVersion, setFrameVersion] = useState(0);
 
-    let captureTimer = undefined
+    useEffect(() => { setSnapshot(null); setAutoRefresh(false); }, [name]);
 
-    // 3. 上来就加载一个默认的界面
+    // Each request replaces the current snapshot; no history is retained.
     useEffect(() => {
-        // 3.1 为相应的容器开启第一个 webshell
-        // AddWebShellLogic()
+        const controller = new AbortController();
+        setLoading(true);
+        setDetailsError("");
+        getNodeDetails(name, controller.signal).then(({data}) => {
+            if (!controller.signal.aborted) setSnapshot(data);
+        }).catch((error) => {
+            if (!controller.signal.aborted) setDetailsError(errorText(error));
+        }).finally(() => {
+            if (!controller.signal.aborted) setLoading(false);
+        });
+        return () => controller.abort();
+    }, [name, refresh]);
 
-        // 3.2 开启抓包线程
-        captureTimer = setInterval(()=>{
-            StartCapture()
-        }, 1000)
+    // Wait until the previous request finishes, then schedule the next snapshot.
+    // Switching off, changing nodes, refreshing manually or leaving cancels the timer.
+    useEffect(() => {
+        if (!autoRefresh || loading) return;
+        const timer = setTimeout(() => setRefresh((value) => value + 1), 5000);
+        return () => clearTimeout(timer);
+    }, [autoRefresh, loading, name, refresh]);
 
-        // 3.3 添加在页面被释放之前的卸载
-        window.addEventListener('beforeunload', ()=>{
-            StopCapture()
-        })
-
-        // 3.4 当界面析构时候的逻辑
-        return ()=>{
-            window.removeEventListener('beforeunload', ()=>{
-                StopCapture()
-            })
-            clearInterval(captureTimer)
-        }
-    }, [])
-
-    // 4. 开启抓包
-    function StartCapture() {
-        let params = {
-            container_name: containerName.replace("_", "-")
-        }
-        startCaptureInterfaceRate(params, (response)=>{
-            setTimeList(response.data["time_list"])
-            setInterfaceRateList(response.data["interface_rate_list"])
-            setCpuRatioList(response.data["cpu_ratio_list"])
-            setMemoryList(response.data["memory_list"])
-            if (response.data["block_ratio_list"]){
-                setBlockRatioList(response.data["block_ratio_list"])
-                console.log("block_ratio_list:", response.data["block_ratio_list"])
-            }
-            if (response.data["connected_count_list"]) {
-                setConnectedList(response.data["connected_count_list"])
-            }
-            if (response.data["half_connected_count_list"]){
-                setHalfConnectedList(response.data["half_connected_count_list"])
-            }
-            if (response.data["time_out_list"]) {
-                setTimeoutList(response.data["time_out_list"])
-            }
-            if (response.data["message_count_list"]){
-                setMessageCountList(response.data["message_count_list"])
-            }
-        }, (error)=>{
-            clearInterval(captureTimer)
-            window.close()
-        })
-    }
-
-    // 5. 停止抓包
-    function StopCapture(){
-        let params = {
-            container_name: containerName.replace("_", "-")
-        }
-        // 暂时关闭 -> 因为后台是一直保持启动的状态
-        // stopCaptureInterfaceRate(params)
-    }
-
-    // 6. 添加webshell的逻辑
-    function AddWebShellLogic(){
-        const containerTypeAndId = containerName.split("_")
-        const realContainerName = containerTypeAndId[0] + "-" + containerTypeAndId[1]
-        let params = {
-            "container_name": realContainerName
-        }
-        startWebShell(params, (response)=>{
-            const webShellInfo = response.data
-            let largestKey = -1
-            if (tabs.length === 0){
-                largestKey = 0
-            } else {
-                // 遍历所有的 tabs 从而找到最大的 key
-                for (let index = 0; index < tabs.length; index++) {
-                    let splitContent  = tabs[index].key.split(":")
-                    let tmpKey = parseInt(splitContent[1])
-                    if (largestKey < tmpKey + 1) {
-                        largestKey = tmpKey + 1
-                    }
+    useEffect(() => {
+        let disposed = false;
+        let pid;
+        setShell(null);
+        setShellError("");
+        // Defer creation so React's effect probe cannot create a second terminal.
+        const timer = setTimeout(() => {
+            openNodeShell(name).then(({data}) => {
+                if (disposed) {
+                    closeNodeShell(data.pid).catch(() => releaseNodeShell(data.pid));
+                    return;
                 }
-            }
-            const newKey = `${realContainerName}:${largestKey}`
-            const url = `http://${webShellInfo.address}:${webShellInfo.port}`
-            setTabs([...tabs, {
-                key: newKey,
-                label: newKey,
-                children: <Row justify="center">
-                    <iframe style={{width:"100%",height:"40vh"}} src={url}/>
-                </Row>,
-                pid: webShellInfo.pid
-            }])
-            message.success({
-                content: "successfully create webshell"
-            })
-        }, (error)=>{
-            message.error({
-                content: "create webshell failed"
-            })
-        })
-    }
+                pid = data.pid;
+                const address = data.address.includes(":") && !data.address.startsWith("[")
+                    ? `[${data.address}]` : data.address;
+                setShell({...data, url: `http://${address}:${data.port}`});
+            }).catch((error) => {
+                if (!disposed) setShellError(errorText(error));
+            });
+        }, 0);
+        const onPageHide = () => {
+            disposed = true;
+            clearTimeout(timer);
+            if (pid) { releaseNodeShell(pid); pid = undefined; }
+        };
+        const onPageShow = (event) => {
+            if (event.persisted) setShellAttempt((value) => value + 1);
+        };
+        window.addEventListener("pagehide", onPageHide);
+        window.addEventListener("pageshow", onPageShow);
+        return () => {
+            disposed = true;
+            clearTimeout(timer);
+            window.removeEventListener("pagehide", onPageHide);
+            window.removeEventListener("pageshow", onPageShow);
+            if (pid) closeNodeShell(pid).catch(() => releaseNodeShell(pid));
+        };
+    }, [name, shellAttempt]);
 
-    // 7. 删除webshell 的逻辑
-    function StopWebShellLogic(targetKey){
-        const deleteTabIndex = tabs.findIndex((tab)=> tab.key === targetKey)
-        let params = {
-            "pid": tabs[deleteTabIndex].pid
-        }
-        stopWebShell(params, (response)=>{
-            const tabsLength = tabs.length
-            if (tabsLength === 1) {
-                setTabs([])
-            } else {
-                const tabsRemained = tabs.filter((tab)=>tab.key !== targetKey)
-                const nextActiveKey = tabsRemained[deleteTabIndex-1].key
-                setActiveTab(nextActiveKey)
-                setTabs(tabsRemained)
-            }
-            message.success({
-                content: "successfully delete webshell"
-            })
-        }, (error)=>{
-            message.error({
-                content: "create webshell failed"
-            })
-        })
-    }
+    const capturedAt = snapshot?.captured_at ? new Date(snapshot.captured_at).toLocaleString("zh-CN") : "尚未获取";
+    const running = snapshot?.status === "running";
 
-    // 8. option for rate
-    const interfaceRateOption = {
-        title: {
-            text: ''
-        },
-        grid: {
-            left: "100px",
-            right: "80px",
-            bottom: "20px"
-        },
-        tooltip: {
-            trigger: "axis"
-        },
-        legend: {
-            data:['节点被攻击速率'],
-            textStyle: {
-                fontSize: 15, // 图例字体大小
-                color:  "red"
-            }
-        },
-        xAxis: {
-            type: "category",
-            data: timeList,
-            axisLabel: {
-                fontSize: 15
-            },
-            nameTextStyle: {
-                fontSize: 20
-            }
-        },
-        yAxis: {
-            name: "节点被攻击速率",
-            type: "value",
-            axisLabel: {
-                formatter: '{value} Mbps',
-                fontSize: 15
-            },
-            nameTextStyle: {
-                fontSize: 20
-            }
-        },
-        series: [{
-            name: '节点被攻击速率',
-            type:'line',
-            yAxisIndex: 0,
-            data: interfaceRateList,
-            lineStyle: {
-                width: 4,
-                color: "rgb(222,7,7)",
-            },
-            smooth: false,
-            symbolSize: 15,
-            color: "rgb(222,7,7)",
-        }]
-    }
-
-    const interfaceRateAndRatioOption = {
-        title: {
-            text: ''
-        },
-        grid: {
-            left: "100px",
-            right: "80px",
-            bottom: "20px"
-        },
-        tooltip: {
-            trigger: "axis"
-        },
-        legend: {
-            data:['节点被攻击速率', "区块高度百分比"],
-            textStyle: {
-                fontSize: 15, // 图例字体大小,
-                // 定义富文本样式
-                color: "rgb(22,237,240)"
-            }
-        },
-        xAxis: {
-            type: "category",
-            data: timeList,
-            axisLabel: {
-                fontSize: 15
-            },
-            nameTextStyle: {
-                fontSize: 20
-            }
-        },
-        yAxis: [
-            {
-                name: "节点被攻击速率",
-                type: "value",
-                axisLabel: {
-                    formatter: '{value} Mbps',
-                    fontSize: 15
-                },
-                nameTextStyle: {
-                    fontSize: 20,
-                    color: "red"
-                }
-            },
-            {
-                name: "区块高度百分比",
-                type: "value",
-                axisLabel: {
-                    formatter: '{value} %',
-                    fontSize: 15
-                },
-                nameTextStyle: {
-                    fontSize: 20,
-                    color: "blue"
-                }
-            }
-        ],
-        series: [
-            {
-                name: '节点被攻击速率',
-                type:'line',
-                yAxisIndex: 0,
-                data: interfaceRateList,
-                lineStyle: {
-                    width: 4,
-                    color: "rgb(222,7,7)",
-                },
-                smooth: false,
-                symbolSize: 15,
-                color: "rgb(222,7,7)",
-            },
-            {
-                name: "区块高度百分比",
-                type: "line",
-                yAxisIndex: 1,
-                data: blockRatioList,
-                lineStyle: {
-                    width: 4,
-                    color: "blue"
-                },
-                smooth: false,
-                symbolSize: 15,
-                color: "blue"
-            }
-        ]
-    }
-
-
-    const cpuAndMemoryRateOption = {
-        title: {
-            text: "",
-        },
-        grid: {
-            left: "80px",
-            right: "80px",
-            bottom: "20px"
-        },
-        tooltip: {
-            trigger: "axis"
-        },
-        legend: {
-            data:['节点 CPU 利用率', "节点内存"],
-            textStyle: {
-                fontSize: 15, // 图例字体大小
-                color: "rgb(22,237,240)"
-            }
-        },
-        xAxis: {
-            type: "category",
-            data: timeList,
-            axisLabel: {
-                fontSize: 15
-            },
-            nameTextStyle: {
-                fontSize: 20,
-            }
-        },
-        yAxis: [
-            {
-                name: "节点 CPU 利用率",
-                type: "value",
-                position: "left",
-                axisLabel: {
-                    formatter: '{value} %',
-                    fontSize: 15
-                },
-                nameTextStyle: {
-                    fontSize: 20,
-                    color: "red"
-                },
-            },
-            {
-                name: "节点内存",
-                type: "value",
-                position: "right",
-                axisLabel: {
-                    formatter: '{value} MB',
-                    fontSize: 15
-                },
-                nameTextStyle: {
-                    fontSize: 20,
-                    color: "blue"
-                },
-            },
-        ],
-        series: [
-            {
-                name: '节点 CPU 利用率',
-                type:'line',
-                yAxisIndex: 0,
-                data: cpuRatioList,
-                lineStyle: {
-                    width: 4,
-                    color: "rgb(222,7,7)",
-                },
-                smooth: false,
-                symbolSize: 15,
-                color: "rgb(222,7,7)",
-            },
-            {
-                name: '节点内存',
-                type:'line',
-                yAxisIndex: 1,
-                data: memoryList,
-                lineStyle: {
-                    width: 4,
-                    color: "blue",
-                },
-                smooth: false,
-                symbolSize: 15,
-                color: "blue",
-            },
-        ]
-    }
-
-    const tcpConnectedAndHalfConnectedOption = {
-        title: {
-            text: "",
-        },
-        grid: {
-            left: "80px",
-            right: "80px",
-            bottom: "20px"
-        },
-        tooltip: {
-            trigger: "axis"
-        },
-        legend: {
-            data:['TCP 已建立连接数', "TCP 半开连接数"],
-            textStyle: {
-                fontSize: 15, // 图例字体大小
-                color: "rgb(22,237,240)"
-            }
-        },
-        xAxis: {
-            type: "category",
-            data: timeList,
-            axisLabel: {
-                fontSize: 15
-            },
-            nameTextStyle: {
-                fontSize: 20
-            }
-        },
-        yAxis: [
-            {
-                name: "TCP 已建立连接数",
-                type: "value",
-                position: "left",
-                axisLabel: {
-                    formatter: '{value}',
-                    fontSize: 15
-                },
-                nameTextStyle: {
-                    fontSize: 20,
-                    color: "purple"
-                },
-            },
-            {
-                name: "TCP 半开连接数",
-                type: "value",
-                position: "right",
-                axisLabel: {
-                    formatter: '{value}',
-                    fontSize: 15
-                },
-                nameTextStyle: {
-                    fontSize: 20,
-                    color: "orange"
-                },
-            },
-        ],
-        series: [
-            {
-                name: 'TCP 已建立连接数',
-                type:'line',
-                yAxisIndex: 1,
-                data: connectedList,
-                lineStyle: {
-                    width: 4,
-                    color: "purple",
-                },
-                smooth: false,
-                symbolSize: 15,
-                color: "purple",
-            },
-            {
-                name: 'TCP 半开连接数',
-                type:'line',
-                yAxisIndex: 1,
-                data: halfConnectedList,
-                lineStyle: {
-                    width: 4,
-                    color: "orange",
-                },
-                smooth: false,
-                symbolSize: 15,
-                color: "orange",
-            }
-        ]
-    }
-
-
-    const timeoutAndMessageCountOption = {
-        title: {
-            text: "",
-        },
-        grid: {
-            left: "80px",
-            right: "80px",
-            bottom: "20px"
-        },
-        tooltip: {
-            trigger: "axis"
-        },
-        legend: {
-            data:['共识超时次数', "总线消息数量"],
-            textStyle: {
-                fontSize: 15, // 图例字体大小
-                color: "rgb(22,237,240)"
-            }
-        },
-        xAxis: {
-            type: "category",
-            data: timeList,
-            axisLabel: {
-                fontSize: 15
-            },
-            nameTextStyle: {
-                fontSize: 20
-            }
-        },
-        yAxis: [
-            {
-                name: "共识超时次数",
-                type: "value",
-                position: "left",
-                axisLabel: {
-                    formatter: '{value}',
-                    fontSize: 15
-                },
-                nameTextStyle: {
-                    fontSize: 20,
-                    color: "purple"
-                },
-            },
-            {
-                name: "总线消息数量",
-                type: "value",
-                position: "right",
-                axisLabel: {
-                    formatter: '{value}',
-                    fontSize: 15
-                },
-                nameTextStyle: {
-                    fontSize: 20,
-                    color: "orange"
-                },
-            },
-        ],
-        series: [
-            {
-                name: '共识超时次数',
-                type:'line',
-                yAxisIndex: 1,
-                data: timeoutList,
-                lineStyle: {
-                    width: 4,
-                    color: "purple",
-                },
-                smooth: false,
-                symbolSize: 15,
-                color: "purple",
-            },
-            {
-                name: '总线消息数量',
-                type:'line',
-                yAxisIndex: 1,
-                data: messageCountList,
-                lineStyle: {
-                    width: 4,
-                    color: "orange",
-                },
-                smooth: false,
-                symbolSize: 15,
-                color: "orange",
-            }
-        ]
-    }
-
-    // 判断应该进行哪种option的返回
-    let echartOption = ()=>{
-        let isChainMaker = containerName.indexOf("ChainMaker") !== -1
-        let isFabric = containerName.indexOf("FabricOrder") !== -1
-        let isFiscoBcos = containerName.indexOf("FiscoBcos") !== -1
-        if (isChainMaker || isFabric || isFiscoBcos) {
-            console.log("is blockchain") // 如果是区块链类型还需要显示 interfaceRateAndRatioOption
-            return interfaceRateAndRatioOption
-        } else {
-            console.log("is not blockchain")
-            return interfaceRateOption
-        }
-    }
-
-
-    return (
-        <div className="instance-container" style={{position: "relative", padding: "8px"}}>
-            <Row style={{height: "12vh", marginLeft: "1vw", marginRight: "1vw"}}>
-
-            </Row>
-            <Row justify={"center"} style={{flex: 1, marginBottom: "8px"}}>
-                <Col span={12} style={{height: "100%", paddingRight: "4px"}}>
-                    <Card
-                        size={"small"}
-                        style={{height: "100%", display: "flex", flexDirection: "column"}}
-                        bodyStyle={{padding: "8px"}}
-                    >
-                        <ReactECharts
-                            option={echartOption()}
-                            style={{flex: 1, width: "100%", minHeight: "400px"}}
-                        >
-                        </ReactECharts>
-                    </Card>
-                </Col>
-                <Col span={12} style={{height: "100%", paddingLeft: "4px"}}>
-                    <Card
-                        size={"small"}
-                        style={{height: "100%", display: "flex", flexDirection: "column"}}
-                        bodyStyle={{padding: "8px"}}
-                    >
-                        <ReactECharts
-                            option={cpuAndMemoryRateOption}
-                            style={{flex: 1, width: "100%", minHeight: "400px"}}
-                        >
-                        </ReactECharts>
-                    </Card>
-                </Col>
-            </Row>
-            <Row justify={"center"} style={{flex: 1, marginBottom: "8px"}}>
-                <Col span={12} style={{height: "100%", paddingRight: "4px"}}>
-                    <Card
-                        size={"small"}
-                        style={{height: "100%", display: "flex", flexDirection: "column"}}
-                        bodyStyle={{padding: "8px"}}
-                    >
-                        <ReactECharts
-                            option={tcpConnectedAndHalfConnectedOption}
-                            style={{flex: 1, width: "100%", minHeight: "400px"}}
-                        >
-                        </ReactECharts>
-                    </Card>
-                </Col>
-                <Col span={12} style={{height: "100%", paddingLeft: "4px"}}>
-                    <Card
-                        size={"small"}
-                        style={{height: "100%", display: "flex", flexDirection: "column"}}
-                        bodyStyle={{padding: "8px"}}
-                    >
-                        <ReactECharts
-                            option={timeoutAndMessageCountOption}
-                            style={{flex: 1, width: "100%", minHeight: "400px"}}
-                        >
-                        </ReactECharts>
-                    </Card>
-                </Col>
-            </Row>
-            {/* <Row justify={"center"} style={{flex: 1, width: "100%"}}>
-                <Col span={24} style={{height: "100%"}}>
-                    <Card style={{height: "100%", display: "flex", flexDirection: "column"}}>
-                        <Tabs
-                            type="editable-card"
-                            style={{flex: 1, width: "100%", display: "flex", flexDirection: "column"}}
-                            activeKey={activeTab}
-                            onChange={(newActiveKey)=>{
-                                setActiveTab(newActiveKey)
-                            }}
-                            // onEdit 是点击增加或者删除的按钮
-                            onEdit={(targetKey, action) => {
-                                // 开启一个新的 webshell
-                                if (action === "add") {
-                                    AddWebShellLogic()
-                                } else if (action === "remove") {
-                                    StopWebShellLogic(targetKey)
-                                } else {
-                                    console.log("unsupported operation")
-                                }
-                            }}
-                            items={tabs}
-                        />
-                    </Card>
-                </Col>
-            </Row> */}
-        </div>
-    )
+    return <ConfigProvider theme={{token: {
+        colorPrimary: "#55c8e8", colorBgContainer: "#111d2e", colorBorderSecondary: "#24354a",
+        colorText: "#e6edf7", colorTextSecondary: "#8da2bb", borderRadius: 10,
+    }}}>
+        <main className="instance-workbench">
+            <header className="instance-header">
+                <div className="instance-brand">
+                    <span className="instance-brand-icon"><CodeOutlined/></span>
+                    <div><div className="instance-eyebrow">节点控制台</div><h1>{name}</h1></div>
+                    <Tag color={running ? "green" : "default"}>{running ? "运行中" : snapshot?.status || "待获取"}</Tag>
+                </div>
+                <Link to={isConstellationNode ? "/constellation" : "/topology"} className="instance-back"><ArrowLeftOutlined/> {isConstellationNode ? "返回星座" : "返回拓扑"}</Link>
+            </header>
+            <div className="instance-toolbar">
+                <div><h2>节点概览</h2><p>采集时间：{capturedAt}{loading && snapshot ? " · 正在刷新" : ""}</p><p>{autoRefresh ? "定时刷新已开启 · 每次请求完成后间隔 5 秒刷新" : "手动模式 · 点击按钮更新节点信息"}</p></div>
+                <div className="instance-refresh-actions">
+                    <Button icon={<ReloadOutlined/>} loading={loading} onClick={() => setRefresh((value) => value + 1)}>手动刷新</Button>
+                    <Button className={autoRefresh ? "instance-auto-refresh is-active" : "instance-auto-refresh"}
+                        aria-pressed={autoRefresh}
+                        icon={autoRefresh ? <PauseCircleOutlined/> : <PlayCircleOutlined/>}
+                        onClick={() => setAutoRefresh((value) => !value)}>
+                        {autoRefresh ? "停止定时刷新" : "开启定时刷新（5秒）"}
+                    </Button>
+                </div>
+            </div>
+            {detailsError && <Alert type="error" showIcon message="节点信息获取失败" description={detailsError}/>}
+            {snapshot?.stats_error && <Alert type="warning" showIcon message="资源信息暂不可用" description={snapshot.stats_error}/>}
+            <section className="instance-metrics" aria-label="节点资源信息">
+                <Card><div className="instance-metric-label">CPU 使用率</div><div className="instance-metric-value">{snapshot?.cpu_percent == null ? "—" : `${snapshot.cpu_percent.toFixed(1)}%`}</div><p>100% 对应一个逻辑核心</p></Card>
+                <Card><div className="instance-metric-label">内存使用</div><div className="instance-metric-value">{formatBytes(snapshot?.memory_bytes)}</div><p>可用上限 {snapshot?.memory_limit ? formatBytes(snapshot.memory_limit) : "—"}</p></Card>
+                <Card><div className="instance-metric-label">CPU 配额</div><div className="instance-metric-value">{snapshot ? (snapshot.cpu_limit > 0 ? `${snapshot.cpu_limit} 核` : "未限制") : "—"}</div><p title={snapshot?.container_id}>容器 ID：{snapshot?.container_id?.slice(0, 12) || "—"}</p></Card>
+                <Card><div className="instance-metric-label">容器镜像</div><div className="instance-image-name">{snapshot?.image || "—"}</div><p>启动时间：{snapshot?.started_at ? new Date(snapshot.started_at).toLocaleString("zh-CN") : "—"}</p></Card>
+            </section>
+            <section className="instance-content">
+                <Card title={<><CodeOutlined/> WebShell</>} className="instance-terminal"
+                    extra={shell && <Button size="small" icon={<ReloadOutlined/>} onClick={() => setFrameVersion((value) => value + 1)}>重载终端</Button>}>
+                    {shell ? <iframe key={`${shell.pid}-${frameVersion}`} title={`${name} WebShell`} src={shell.url}/>
+                        : shellError ? <div className="instance-terminal-state"><Alert type="error" showIcon message="终端连接失败" description={shellError}/><Button onClick={() => setShellAttempt((value) => value + 1)}>重试连接</Button></div>
+                            : <div className="instance-terminal-state"><Spin/><p>正在连接节点终端…</p></div>}
+                </Card>
+                <Card className="instance-details" title="节点详情">
+                    <Tabs items={[
+                        {key: "routes", label: "路由条目", children: <TextSections sections={snapshot?.routes} emptyText={loading ? "正在读取路由…" : "暂无路由信息"}/>},
+                        {key: "configs", label: "配置文件", children: <TextSections sections={snapshot?.configs} emptyText={loading ? "正在读取配置…" : "暂无配置信息"}/>},
+                    ]}/>
+                </Card>
+            </section>
+        </main>
+    </ConfigProvider>;
 }

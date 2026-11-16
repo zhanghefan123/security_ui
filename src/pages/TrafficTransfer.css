@@ -1,0 +1,44 @@
+.traffic-card { margin: 0 18px 16px; padding: 16px; border: 1px solid #2b3d54; border-radius: 12px; background: #111d2e; color: #e6edf7; }
+.traffic-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 600; }
+.traffic-card-heading .anticon, .traffic-dialog .ant-modal-title .anticon { margin-right: 7px; color: #7bdad1; }
+.traffic-task-state { font-size: 12px; color: #a3b3c9; font-weight: 400; }
+.traffic-task-state.is-active { color: #7bdad1; }
+.traffic-endpoints { margin: 12px 0 6px; font-weight: 600; overflow-wrap: anywhere; }
+.traffic-endpoints > span { margin: 0 8px; color: #7bdad1; }
+.traffic-task-meta, .traffic-task-metrics { color: #a3b3c9; font-size: 13px; }
+.traffic-task-metrics { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+.traffic-task-metrics strong { margin-left: 8px; color: #e6edf7; font-variant-numeric: tabular-nums; font-weight: 500; }
+.traffic-color-legend { display: flex; align-items: center; gap: 8px; margin: 12px 0 8px; color: #a3b3c9; font-size: 12px; }
+.traffic-color-legend i { width: 100px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #ffb6a9, #ff8179, #ef4d52, #ce263c); }
+.traffic-note { color: #a3b3c9; font-size: 12px; line-height: 1.7; margin: 10px 0; }
+.traffic-warning { color: #f0c483; font-size: 13px; overflow-wrap: anywhere; }
+.traffic-error { color: #ffaaa8; font-size: 13px; overflow-wrap: anywhere; }
+.traffic-probability-result { margin-top: 12px; }
+.traffic-probability-label { display: block; margin: 12px 0 8px; color: #c8d5e6; }
+.traffic-probability-select { width: 100%; }
+.traffic-source { color: #a3b3c9; margin: 16px 0 20px; }
+.traffic-source strong { margin-left: 10px; color: #e6edf7; }
+.traffic-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+.traffic-form-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #24354a; }
+.traffic-dialog .ant-form-item-label > label { color: #c8d5e6; }
+.traffic-dialog .ant-input-number { width: 100%; background: #142337; border-color: #344960; color: #e6edf7; }
+.traffic-dialog .ant-input-number-input { color: #e6edf7; }
+.traffic-dialog .ant-select-selector { background: #142337 !important; border-color: #344960 !important; color: #e6edf7 !important; }
+.traffic-dialog .ant-select-arrow, .traffic-dialog .ant-select-selection-placeholder { color: #a3b3c9; }
+.traffic-dialog .ant-alert { margin-top: 12px; }
+.traffic-dialog .ant-alert-info { background: #142b3c; border-color: #2e5571; }
+.traffic-dialog .ant-alert-warning { background: #30291e; border-color: #6a5231; }
+.traffic-dialog .ant-alert-error { background: #342329; border-color: #75414b; }
+.traffic-dialog .ant-alert-message { color: #e6edf7; }
+.traffic-dialog .ant-btn-default { background: #142337; border-color: #344960; color: #c8d5e6; }
+.traffic-dialog .ant-btn:disabled { background: #172331; border-color: #2b3d54; color: #8494ac; }
+.traffic-dialog .ant-select-disabled .ant-select-selector { color: #8494ac !important; }
+.traffic-dialog .ant-modal-close { color: #a3b3c9; }
+.traffic-dialog .ant-modal-content, .traffic-dialog .ant-modal-header { background: #111d2e; }
+.traffic-dialog .ant-modal-title { color: #e6edf7; }
+.traffic-select-dropdown { background: #142337; }
+.traffic-select-dropdown .ant-select-item { color: #c8d5e6; }
+.traffic-select-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled) { background: #243b52; }
+.traffic-select-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) { background: #294b62; color: #e6edf7; }
+.traffic-select-dropdown .ant-select-item-option-disabled { color: #67768a; }
+@media (max-width: 600px) { .traffic-form-grid { grid-template-columns: 1fr; } .traffic-card { margin: 0 12px 12px; } }
