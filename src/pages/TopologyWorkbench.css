@@ -184,20 +184,18 @@
 .topology-workbench .topology-settings-form .topology-form-actions .ant-btn { width: 100%; padding-inline: 6px; }
 .topology-workbench .topology-settings-form .topology-inline-action { align-self: end; padding-bottom: var(--ui-gap); }
 .topology-workbench .topology-inline-action .ant-btn { width: 100%; }
-/* Shared section rhythm: forms, disclosures, actions and results. */
+/* Shared section rhythm: forms, sections, actions and results. */
 .topology-workbench .topology-section-note { margin: 0; color: var(--workbench-muted); font-size: var(--ui-caption); line-height: 1.7; overflow-wrap: anywhere; }
 .topology-system-config .topology-form-actions { margin-top: var(--ui-gap); }
 .topology-runtime-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; min-height: var(--ui-control); }
 .topology-runtime-label { color: #a8b8cd; font-size: var(--ui-body); }
 .topology-runtime-label .anticon { color: #6aaac2; margin-right: 8px; }
-.topology-disclosure { min-width: 0; border-top: 1px solid var(--workbench-border); }
-.topology-disclosure > summary { cursor: pointer; padding: 14px 0; color: var(--workbench-text); font-size: var(--ui-body); line-height: 1.6; overflow-wrap: anywhere; }
-.topology-disclosure > summary::marker { color: var(--workbench-accent); }
-.topology-disclosure > summary:focus-visible { outline: 2px solid var(--workbench-accent); outline-offset: 3px; border-radius: 4px; }
-.topology-disclosure-hint { margin-left: 12px; color: var(--workbench-muted); font-size: var(--ui-caption); font-weight: 400; }
-.topology-disclosure-body { padding: 4px 0 8px; }
-.topology-attack-disclosure { margin-top: 12px; }
-.topology-attack-disclosure:not([open]) > summary { padding-bottom: 0; }
+.topology-subsection { min-width: 0; border-top: 1px solid var(--workbench-border); }
+.topology-subsection-heading { margin: 0; padding: 14px 0; color: var(--workbench-text); font-size: var(--ui-body); font-weight: 500; line-height: 1.6; overflow-wrap: anywhere; }
+.topology-subsection-hint { margin-left: 12px; color: var(--workbench-muted); font-size: var(--ui-caption); font-weight: 400; }
+.topology-subsection-body { padding: 4px 0 8px; }
+.topology-attack-section { margin-top: 12px; }
+.topology-attack-section .topology-section-note { margin-bottom: var(--ui-gap); }
 
 .blockchain-benchmark { min-width: 0; }
 .benchmark-intro { display: flex; align-items: start; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: var(--ui-gap); }
@@ -318,7 +316,7 @@
 @container topology-controls (max-width: 24rem) {
     .benchmark-fields { grid-template-columns: minmax(0, 1fr); }
     .benchmark-actions > .ant-btn { flex: 1 1 7rem; }
-    .topology-disclosure-hint { display: block; margin-left: 1rem; }
+    .topology-subsection-hint { display: block; margin-left: 1rem; }
     .benchmark-metadata > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }
 /* Let the toolbar respond to the left column, not the monitor resolution. */

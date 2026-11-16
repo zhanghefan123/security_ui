@@ -6,7 +6,8 @@ const defaults = {concurrency: 20, duration_seconds: 60, target_tps: 0, timeout_
 const states = {preparing: "准备合约", running: "压测中", stopping: "等待交易与资源释放", completed: "已完成", failed: "失败"};
 const active = task => ["preparing", "running", "stopping"].includes(task?.state);
 
-export default function BlockchainBenchmark({ready, onTimes, onRates, isFisco, children}) {
+export default function BlockchainBenchmark({disabledReason = "", onTimes, onRates, isFisco, children}) {
+    const ready = !disabledReason;
     const [form] = Form.useForm();
     const [task, setTask] = useState(null);
     const [error, setError] = useState("");
@@ -14,7 +15,6 @@ export default function BlockchainBenchmark({ready, onTimes, onRates, isFisco, c
     const [busy, setBusy] = useState(false);
     const [refresh, setRefresh] = useState(0);
     const generation = useRef(0);
-    const advancedRef = useRef(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -76,12 +76,13 @@ export default function BlockchainBenchmark({ready, onTimes, onRates, isFisco, c
 
     return <div className="blockchain-benchmark">
         <div className="benchmark-intro">
-            <p className="topology-section-note">{ready ? "设置负载后开始压测，停止后等待在途交易确认。" : "启动区块链拓扑后，即可发起交易压测。"}</p>
+            <p id="benchmark-availability" className="topology-section-note">{disabledReason || "设置负载后开始压测，停止后等待在途交易确认。"}</p>
             {task && <Tag color={{running: "cyan", completed: "green", failed: "red", stopping: "gold"}[task.state]}>{states[task.state] || task.state}</Tag>}
         </div>
         <Form form={form} layout="vertical" className="topology-settings-form" initialValues={defaults}
-            disabled={busy || active(task)} onFinish={values => mutate(startTxRateTest, values)}
-            onFinishFailed={() => { if (advancedRef.current) advancedRef.current.open = true; }}>
+            disabled={busy || active(task)} onFinish={values => {
+                if (ready && !busy && !active(task)) mutate(startTxRateTest, values);
+            }}>
             <div className="benchmark-fields benchmark-basic-fields">
                 <Form.Item name="concurrency" label="并发数" rules={[{required: true, message: "请填写并发数"}]}>
                     <InputNumber min={1} max={512} precision={0} />
@@ -93,9 +94,9 @@ export default function BlockchainBenchmark({ready, onTimes, onRates, isFisco, c
                     <InputNumber min={0} max={1000000} />
                 </Form.Item>
             </div>
-            <details ref={advancedRef} className="topology-disclosure benchmark-advanced">
-                <summary>高级参数<span className="topology-disclosure-hint">合约、超时与入口节点</span></summary>
-                <div className="topology-disclosure-body">
+            <section className="topology-subsection benchmark-advanced" aria-label="高级参数">
+                <h3 className="topology-subsection-heading">高级参数<span className="topology-subsection-hint">合约、超时与入口节点</span></h3>
+                <div className="topology-subsection-body">
                     <Form.Item name="contract" label={isFisco ? "已有 HelloWorld 合约地址" : "已有测试合约名称"}
                         extra={isFisco ? "留空时部署新合约" : "留空时使用默认准备流程"}>
                         <Input maxLength={256} />
@@ -115,10 +116,10 @@ export default function BlockchainBenchmark({ready, onTimes, onRates, isFisco, c
                         </Form.Item>}
                     </div>
                 </div>
-            </details>
+            </section>
         </Form>
         <div className="benchmark-actions">
-            <Button type="primary" disabled={!ready || busy || active(task)} onClick={() => form.submit()}>开始压测</Button>
+            <Button type="primary" aria-describedby="benchmark-availability" disabled={!ready || busy || active(task)} onClick={() => form.submit()}>开始压测</Button>
             <Button danger disabled={busy || !active(task) || task?.state === "stopping"} onClick={() => mutate(stopTxRateTest, {task_id: task.id})}>停止压测</Button>
             <Button disabled={!task || active(task)} onClick={download}>导出结果</Button>
         </div>
@@ -137,9 +138,9 @@ export default function BlockchainBenchmark({ready, onTimes, onRates, isFisco, c
                 <span>在途 <strong>{task.in_flight}</strong></span>
             </div>
             {children}
-            <details className="topology-disclosure benchmark-task-details">
-                <summary>任务详情<span className="topology-disclosure-hint">合约与统计口径</span></summary>
-                <div className="topology-disclosure-body">
+            <section className="topology-subsection benchmark-task-details" aria-label="任务详情">
+                <h3 className="topology-subsection-heading">任务详情<span className="topology-subsection-hint">合约与统计口径</span></h3>
+                <div className="topology-subsection-body">
                     <dl className="benchmark-metadata">
                         <div><dt>工作负载</dt><dd>{task.workload}</dd></div>
                         <div><dt>合约</dt><dd>{task.contract || "准备中"}</dd></div>
@@ -149,7 +150,7 @@ export default function BlockchainBenchmark({ready, onTimes, onRates, isFisco, c
                     </dl>
                     <p className="topology-section-note">TPS 只统计本次交易的成功确认，合约准备不计时。三种链使用不同测试合约，不能直接作为等价负载比较。</p>
                 </div>
-            </details>
+            </section>
         </section> : <p className="benchmark-empty">开始压测后，将在这里展示确认速率、交易统计与 TPS 曲线。</p>}
     </div>;
 }

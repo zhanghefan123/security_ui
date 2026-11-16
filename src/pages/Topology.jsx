@@ -82,7 +82,7 @@ const TOPOLOGY_START_STEP_LABELS = {
 
 // 函数化组件
 export function Topology(props) {
-    const [controlsCollapsed, setControlsCollapsed] = useState(() => window.matchMedia("(max-width: 960px)").matches);
+    const [controlsCollapsed, setControlsCollapsed] = useState(false);
 
 
     // 1. 进行 G6 拓扑的自定义的边的注册
@@ -1622,6 +1622,10 @@ export function Topology(props) {
 
     // 21.2 当启动攻击的时候
     function onStartAttackFinish() {
+        if (attackDisabledReason) {
+            message.warning(attackDisabledReason);
+            return;
+        }
         let tableValues = [
             {
                 key: "1",
@@ -1758,6 +1762,15 @@ export function Topology(props) {
 
     // 25. 实际的 HTML 代码
     // ---------------------------------------------------------------------------------------------
+    const benchmarkDisabledReason = topologyNeedsCleanup
+        ? "拓扑清理尚未完成，请先停止拓扑并完成清理。"
+        : selectedBlockchain === "无区块链"
+            ? "当前未选择区块链。交易 TPS 压测需要先选择并启动区块链拓扑。"
+            : !currentTopologyState ? "请先启动区块链拓扑，再开始交易压测。" : "";
+    const attackDisabledReason = topologyNeedsCleanup
+        ? "拓扑清理尚未完成，暂不能发起攻击实验。"
+        : !currentTopologyState ? "请先启动拓扑，再发起攻击实验。"
+            : currentAttackState ? "攻击正在进行，请等待结束。" : "";
     return (
         <div className="topology-container topology-workbench">
             {topologyNeedsCleanup && <Alert type="warning" showIcon message="拓扑清理未完成，请点击停止拓扑重试；清理完成前不能启动新实验。" />}
@@ -1876,7 +1889,7 @@ export function Topology(props) {
                     </Col>
                   </Row>
                   <Form.Item name={consensusThreadCountField[0]} hidden><InputNumber /></Form.Item>
-                  <p className="topology-section-note">接入链路带宽由后端配置控制；路由协议在启动时选择。</p>
+                  <p className="topology-section-note">接入链路带宽由后端配置控制；路由协议在启动时选择。安装链码仅适用于 Fabric。</p>
                   <Row style={{
                     display: "none"
                   }}>
@@ -1899,29 +1912,30 @@ export function Topology(props) {
                     <Col span={8}>
                       <Button type={"primary"} danger disabled={!currentTopologyState} onClick={StopTopology}>停止拓扑</Button>
                     </Col>
-                    {selectedBlockchain === "fabric" && <Col span={8}>
-                      <Button disabled={!currentTopologyState || topologyNeedsCleanup} onClick={installChannelAndChaincodeClicked}>安装链码</Button>
-                    </Col>}
+                    <Col span={8}>
+                      <Button disabled={selectedBlockchain !== "fabric" || !currentTopologyState || topologyNeedsCleanup} onClick={installChannelAndChaincodeClicked}>安装链码</Button>
+                    </Col>
                   </Row>
                 </Form>
               </Card>
-              {selectedBlockchain !== "无区块链" && <Card className="topology-panel topology-benchmark-panel" title={<span><span className="topology-section-number">03</span>交易压测</span>} extra={<span className="topology-panel-caption">{selectedBlockchain}</span>}>
-                <BlockchainBenchmark ready={currentTopologyState && !topologyNeedsCleanup}
+              <Card className="topology-panel topology-benchmark-panel" title={<span><span className="topology-section-number">03</span>交易压测</span>} extra={<span className="topology-panel-caption">{selectedBlockchain}</span>}>
+                <BlockchainBenchmark disabledReason={benchmarkDisabledReason}
                     isFisco={selectedBlockchain === "fisco-bcos"} onTimes={setTimeList} onRates={setCurrentTps}>
                   <div className="topology-chart-heading"><span>成功确认 TPS</span><span>从开始发送计时 · 秒</span></div>
                   <div className="topology-metrics-chart">
                     <ReactECharts option={rateOption} style={{position: "absolute", inset: 0, height: "100%", width: "100%"}} />
                   </div>
                 </BlockchainBenchmark>
-              </Card>}
-              <Card className="topology-panel topology-security-config" title={<span><span className="topology-section-number">{selectedBlockchain === "无区块链" ? "03" : "04"}</span>攻击与防御</span>} extra={<span className="topology-panel-caption">实验控制</span>}>
+              </Card>
+              <Card className="topology-panel topology-security-config" title={<span><span className="topology-section-number">04</span>攻击与防御</span>} extra={<span className="topology-panel-caption">实验控制</span>}>
                 <div className="topology-runtime-row">
                   <span className="topology-runtime-label"><SafetyCertificateOutlined />安全防御</span>
                   <Switch value={startDefence} disabled={topologyNeedsCleanup} onChange={onStartDefenceChange} aria-label="安全防御" checkedChildren="开" unCheckedChildren="关" />
                 </div>
-                <details className="topology-disclosure topology-attack-disclosure">
-                  <summary>攻击配置<span className="topology-disclosure-hint">{currentAttackState ? "攻击进行中" : "按需展开"}</span></summary>
-                  <div className="topology-disclosure-body">
+                <section className="topology-subsection topology-attack-section" aria-label="攻击配置">
+                  <h3 className="topology-subsection-heading">攻击配置{currentAttackState && <span className="topology-subsection-hint">攻击进行中</span>}</h3>
+                  <div className="topology-subsection-body">
+                    <p id="attack-availability" className="topology-section-note">{attackDisabledReason || "选择攻击节点和目标节点后发起实验。"}</p>
                     <Form name={"attack start form"} onFinishFailed={onValidateStartAttackFailed} onFinish={onStartAttackFinish} onValuesChange={onStartAttackValuesChange} initialValues={{
                       [attackThreadCountField[0]]: selectedAttackThreadCount,
                       [attackTypeField[0]]: selectedAttackType,
@@ -1990,12 +2004,12 @@ export function Topology(props) {
                           </Form.Item>
                         </Col>
                         <Col span={12} className="topology-inline-action">
-                          <Button type={"primary"} htmlType={"submit"} danger disabled={currentAttackState}>开始攻击</Button>
+                          <Button type={"primary"} htmlType={"submit"} danger aria-describedby="attack-availability" disabled={!!attackDisabledReason}>开始攻击</Button>
                         </Col>
                       </Row>
                     </Form>
                   </div>
-                </details>
+                </section>
               </Card>
               {trafficEnabled && (traffic.p2p || traffic.task || traffic.error) && <div className="topology-traffic-summary">
                 <ChainMakerTrafficCard traffic={traffic} />
