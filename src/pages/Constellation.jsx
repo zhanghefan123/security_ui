@@ -52,6 +52,7 @@ const CONSTELLATION_STEP_LABELS = {
 
 // Constellation 页面
 export function Constellation(props) {
+    const [controlsCollapsed, setControlsCollapsed] = useState(false);
     // 0. 对视图的引用
     // ---------------------------------------------------------------------------------------------
     const viewerRef = useRef(null);
@@ -948,10 +949,16 @@ export function Constellation(props) {
               <div className="constellation-brand-icon"><GlobalOutlined /></div>
               <div><div className="constellation-eyebrow">CONSTELLATION / SIMULATION CENTER</div><h1>链路感知的安全可控路由原型系统</h1></div>
             </div>
-            <div className={"constellation-status" + (currentConstellationState && !constellationNeedsCleanup ? " is-active" : "")}><span />{constellationNeedsCleanup ? "星座待清理" : currentConstellationState ? "星座运行中" : "星座未启动"}</div>
+            <div className="constellation-header-actions">
+              <div className={"constellation-status" + (currentConstellationState && !constellationNeedsCleanup ? " is-active" : "")}><span />{constellationNeedsCleanup ? "星座待清理" : currentConstellationState ? "星座运行中" : "星座未启动"}</div>
+              <Button aria-controls="constellation-sidebar" aria-expanded={!controlsCollapsed}
+                  onClick={() => setControlsCollapsed(collapsed => !collapsed)}>
+                {controlsCollapsed ? "展开配置" : "收起配置"}
+              </Button>
+            </div>
           </header>
-          <main className="constellation-workspace">
-            <aside className="constellation-sidebar" aria-label="星座配置与运行控制">
+          <main className={"constellation-workspace" + (controlsCollapsed ? " is-controls-collapsed" : "")}>
+            <aside id="constellation-sidebar" className="constellation-sidebar" aria-label="星座配置与运行控制" hidden={controlsCollapsed} tabIndex={0}>
               <Form form={startConstellationForm} name={nameOfForm} onFinishFailed={onValidateStartConstellationFailed} onFinish={onStartConstellationFinish} onValuesChange={onStartConstellationValuesChange} initialValues={{
                 orbit_config: {...DEFAULT_ORBIT_CONFIG},
                 [orbitNumberFieldName[0]]: orbitNumber,
@@ -1026,6 +1033,7 @@ export function Constellation(props) {
                 <div><span>每轨道卫星</span><strong>{satellitePerOrbit ?? "—"}</strong></div>
                 <div><span>已选地面站</span><strong>{selectedGroundStations.length}</strong></div>
               </div>
+              <ConstellationTrafficCard traffic={traffic} />
             </aside>
             <section className="constellation-scene-panel" aria-label="三维星座视图">
               <div className="constellation-scene-header">
@@ -1042,7 +1050,6 @@ export function Constellation(props) {
                   </ConstellationTrafficContext.Provider>
                 </Viewer>
               </ConstellationLabelContext.Provider></div>
-              <ConstellationTrafficCard traffic={traffic} />
               <footer className="constellation-scene-footer">
                 <div className="constellation-legend"><span><i className="satellite" />卫星</span><span><i className="orbit-guide" />近圆轨道</span><span><i className="ground-selected" />已选地面站</span><span><i className="ground-available" />未选地面站</span></div>
                 <span>拖拽旋转 · 滚轮缩放 · 右键节点打开操作菜单</span>
